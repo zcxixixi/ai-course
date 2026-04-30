@@ -1,0 +1,13 @@
+.DS_Store
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# 官方课件原始文件体积较大，先保留在本地；后续安装 Git LFS 后再纳入版本管理。
+官方文档/**/*.pptx
+官方文档/**/*.pdf
+官方文档/**/*.docx
+官方文档/**/*.rar
