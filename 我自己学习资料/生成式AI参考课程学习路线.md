@@ -4,6 +4,7 @@
 
 - `我自己学习资料/references/generative-ai-for-beginners`
 - 中文版入口：`我自己学习资料/references/generative-ai-for-beginners/translations/zh-CN/README.md`
+- `我自己学习资料/references/nn-zero-to-hero`
 
 ## 我们怎么用
 
@@ -35,13 +36,40 @@
 8. 大模型、VLM、RAG 与 Agent  
    参考：`11-integrating-with-function-calling`、`15-rag-and-vector-databases`、`17-ai-agents`。
 
+## Karpathy 神经网络底层路线
+
+Karpathy 的 `nn-zero-to-hero` 用来补底层原理，不作为学生直接主教材。
+
+1. Lecture 1 `micrograd`  
+   对应第 3 章：计算图、梯度、反向传播、神经网络训练。
+
+2. Lecture 2 `makemore_part1_bigrams`  
+   对应第 7 章：语言模型最小原型、下一个 token/字符预测、损失函数。
+
+3. Lecture 3 `makemore_part2_mlp`  
+   对应第 3/7 章：Embedding、MLP、训练集/验证集/测试集、过拟合。
+
+4. Lecture 4-5 `activations & gradients`、`manual backprop`  
+   对应第 4 章：深层网络为什么难训练、梯度流、BatchNorm。
+
+5. Lecture 6 `WaveNet`  
+   对应第 4/7 章：从 MLP 到更深的序列模型。
+
+6. Lecture 7 `GPT from scratch`  
+   对应第 7/8 章：注意力机制、Transformer、GPT 基本结构。
+
+7. Lecture 8 `Tokenizer`  
+   对应第 5/7/8 章：token、分词、上下文窗口、LLM 的奇怪行为来源。
+
 ## 第一阶段先学这些
 
 1. `01-introduction-to-genai`：生成式 AI 和 LLM 是什么。
-2. `04-prompt-engineering-fundamentals`：提示词基础。
-3. `07-building-chat-applications`：聊天应用。
-4. `08-building-search-applications`：embedding 搜索。
-5. `15-rag-and-vector-databases`：RAG。
-6. `17-ai-agents`：Agent。
+2. Karpathy `Lecture 1 micrograd`：神经网络训练和反向传播。
+3. Karpathy `Lecture 2 makemore bigram`：语言模型最小原型。
+4. `04-prompt-engineering-fundamentals`：提示词基础。
+5. `07-building-chat-applications`：聊天应用。
+6. `08-building-search-applications`：embedding 搜索。
+7. `15-rag-and-vector-databases`：RAG。
+8. `17-ai-agents`：Agent。
 
-这 6 个足够支撑我们把课程做成实用版。
+这 8 个足够支撑我们把课程做成“有底层、有应用”的实用版。
