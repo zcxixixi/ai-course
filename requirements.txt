@@ -1,8 +1,11 @@
 ipykernel
 ipywidgets
+nbformat
+nbclient
 numpy
 pandas
 matplotlib
+graphviz
 tqdm
 python-dotenv
 openai
