@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>自动贪吃蛇</title>
+  <style>
+    :root {
+      --bg: #f7faf6;
+      --ink: #10201a;
+      --muted: rgba(16, 32, 26, 0.68);
+      --line: rgba(16, 32, 26, 0.14);
+      --green: #0f9f5f;
+      --mint: #dff8e9;
+      --yellow: #f0a202;
+      --red: #d92d55;
+      --panel: rgba(255, 255, 255, 0.82);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 22% 18%, rgba(15, 159, 95, 0.12), transparent 30%),
+        radial-gradient(circle at 78% 82%, rgba(240, 162, 2, 0.12), transparent 32%),
+        linear-gradient(135deg, #ffffff 0%, #f4fbf6 50%, #eef5ff 100%);
+      color: var(--ink);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      letter-spacing: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      padding: clamp(14px, 2.2vw, 28px);
+    }
+
+    .app {
+      width: min(1120px, 100%);
+      display: grid;
+      grid-template-columns: minmax(280px, 340px) minmax(340px, 1fr);
+      gap: clamp(18px, 3vw, 34px);
+      align-items: center;
+    }
+
+    .side {
+      border-left: 1px solid var(--line);
+      padding-left: clamp(18px, 2.6vw, 30px);
+    }
+
+    .kicker {
+      color: var(--green);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(42px, 6.4vw, 74px);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .stat {
+      min-height: 92px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 12px 34px rgba(29, 60, 44, 0.08);
+      padding: 14px;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
+    .stat b {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid rgba(15, 159, 95, 0.28);
+      background: rgba(15, 159, 95, 0.10);
+      color: var(--ink);
+      min-height: 42px;
+      padding: 0 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: rgba(15, 159, 95, 0.65);
+      background: rgba(15, 159, 95, 0.18);
+    }
+
+    .board-wrap {
+      position: relative;
+      width: min(72vh, 100%);
+      max-width: 660px;
+      aspect-ratio: 1;
+      justify-self: center;
+      border: 1px solid rgba(15, 159, 95, 0.24);
+      background:
+        linear-gradient(rgba(15, 159, 95, 0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 159, 95, 0.10) 1px, transparent 1px),
+        #ffffff;
+      background-size: calc(100% / 24) calc(100% / 24);
+      box-shadow:
+        0 28px 90px rgba(29, 60, 44, 0.16),
+        inset 0 0 44px rgba(15, 159, 95, 0.08);
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .pulse {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border: 1px solid rgba(255, 209, 102, 0.0);
+      animation: pulse 2.6s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: inset 0 0 0 rgba(255, 209, 102, 0); }
+      50% { box-shadow: inset 0 0 40px rgba(240, 162, 2, 0.16); }
+    }
+
+    @media (max-width: 820px) {
+      body {
+        overflow-y: auto;
+        place-items: start center;
+      }
+
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding-left: 0;
+        padding-top: 18px;
+      }
+
+      .board-wrap {
+        width: min(94vw, 640px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="side">
+      <div class="kicker">Self Playing Snake</div>
+      <h1>自动<br>贪吃蛇</h1>
+      <p class="sub">程序会自己寻找食物，并在危险时切换到保命策略。你可以暂停、重开、加速观察它的路线选择。</p>
+
+      <div class="stats" aria-label="游戏状态">
+        <div class="stat">
+          <span>分数</span>
+          <b id="score">0</b>
+        </div>
+        <div class="stat">
+          <span>长度</span>
+          <b id="length">4</b>
+        </div>
+        <div class="stat">
+          <span>策略</span>
+          <b id="mode">寻食</b>
+        </div>
+        <div class="stat">
+          <span>速度</span>
+          <b id="speed">9</b>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="toggle" type="button">暂停</button>
+        <button id="reset" type="button">重开</button>
+        <button id="faster" type="button">加速</button>
+        <button id="slower" type="button">减速</button>
+      </div>
+    </section>
+
+    <section class="board-wrap" aria-label="自动贪吃蛇棋盘">
+      <canvas id="game"></canvas>
+      <div class="pulse" aria-hidden="true"></div>
+    </section>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const snakeImage = new Image();
+    snakeImage.src = "/Users/kaijimima1234/Desktop/images.jpeg";
+    const scoreEl = document.getElementById("score");
+    const lengthEl = document.getElementById("length");
+    const modeEl = document.getElementById("mode");
+    const speedEl = document.getElementById("speed");
+    const toggleBtn = document.getElementById("toggle");
+
+    const size = 24;
+    const directions = [
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+      { x: 0, y: -1 }
+    ];
+
+    let cell = 0;
+    let snake = [];
+    let food = { x: 18, y: 10 };
+    let direction = { x: 1, y: 0 };
+    let score = 0;
+    let speed = 9;
+    let paused = false;
+    let lastTick = 0;
+    let mode = "寻食";
+    let particles = [];
+    let imageReady = false;
+
+    snakeImage.addEventListener("load", () => {
+      imageReady = true;
+      draw();
+    });
+
+    function key(point) {
+      return `${point.x},${point.y}`;
+    }
+
+    function same(a, b) {
+      return a.x === b.x && a.y === b.y;
+    }
+
+    function inside(point) {
+      return point.x >= 0 && point.y >= 0 && point.x < size && point.y < size;
+    }
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = rect.width * ratio;
+      canvas.height = rect.height * ratio;
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      cell = rect.width / size;
+      draw();
+    }
+
+    function reset() {
+      snake = [
+        { x: 8, y: 12 },
+        { x: 7, y: 12 },
+        { x: 6, y: 12 },
+        { x: 5, y: 12 }
+      ];
+      direction = { x: 1, y: 0 };
+      score = 0;
+      mode = "寻食";
+      particles = [];
+      placeFood();
+      updateStats();
+    }
+
+    function occupiedSet(ignoreTail = true) {
+      const body = ignoreTail ? snake.slice(0, -1) : snake;
+      return new Set(body.map(key));
+    }
+
+    function placeFood() {
+      const occupied = occupiedSet(false);
+      const empty = [];
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+          const point = { x, y };
+          if (!occupied.has(key(point))) empty.push(point);
+        }
+      }
+      food = empty[Math.floor(Math.random() * empty.length)] || { x: 0, y: 0 };
+    }
+
+    function neighbors(point, blocked) {
+      return directions
+        .map((dir) => ({ x: point.x + dir.x, y: point.y + dir.y }))
+        .filter((next) => inside(next) && !blocked.has(key(next)));
+    }
+
+    function findPath(start, target) {
+      const blocked = occupiedSet(true);
+      blocked.delete(key(start));
+
+      const queue = [start];
+      const cameFrom = new Map([[key(start), null]]);
+
+      for (let i = 0; i < queue.length; i += 1) {
+        const current = queue[i];
+        if (same(current, target)) break;
+
+        for (const next of neighbors(current, blocked)) {
+          const nextKey = key(next);
+          if (!cameFrom.has(nextKey)) {
+            cameFrom.set(nextKey, current);
+            queue.push(next);
+          }
+        }
+      }
+
+      if (!cameFrom.has(key(target))) return [];
+
+      const path = [];
+      let current = target;
+      while (!same(current, start)) {
+        path.push(current);
+        current = cameFrom.get(key(current));
+      }
+      return path.reverse();
+    }
+
+    function floodCount(start, blocked) {
+      const queue = [start];
+      const seen = new Set([key(start)]);
+
+      for (let i = 0; i < queue.length; i += 1) {
+        for (const next of neighbors(queue[i], blocked)) {
+          const nextKey = key(next);
+          if (!seen.has(nextKey)) {
+            seen.add(nextKey);
+            queue.push(next);
+          }
+        }
+      }
+      return seen.size;
+    }
+
+    function chooseMove() {
+      const head = snake[0];
+      const pathToFood = findPath(head, food);
+
+      if (pathToFood.length > 0 && isMoveSpacious(pathToFood[0])) {
+        mode = "寻食";
+        return pathToFood[0];
+      }
+
+      const blocked = occupiedSet(true);
+      const safeMoves = neighbors(head, blocked)
+        .map((move) => ({
+          move,
+          space: floodCount(move, new Set([...blocked, key(head)])),
+          tailDistance: Math.abs(move.x - snake[snake.length - 1].x) + Math.abs(move.y - snake[snake.length - 1].y)
+        }))
+        .sort((a, b) => b.space - a.space || b.tailDistance - a.tailDistance);
+
+      mode = "保命";
+      return safeMoves[0]?.move || { x: head.x + direction.x, y: head.y + direction.y };
+    }
+
+    function isMoveSpacious(move) {
+      const blocked = occupiedSet(true);
+      const futureBlocked = new Set([...blocked, key(snake[0])]);
+      const space = floodCount(move, futureBlocked);
+      return space > Math.min(40, snake.length + 8);
+    }
+
+    function step() {
+      const next = chooseMove();
+      const head = snake[0];
+      direction = { x: next.x - head.x, y: next.y - head.y };
+
+      if (!inside(next) || occupiedSet(true).has(key(next))) {
+        reset();
+        return;
+      }
+
+      snake.unshift(next);
+
+      if (same(next, food)) {
+        score += 10;
+        burst(food);
+        placeFood();
+      } else {
+        snake.pop();
+      }
+
+      updateStats();
+    }
+
+    function burst(point) {
+      for (let i = 0; i < 18; i += 1) {
+        particles.push({
+          x: (point.x + 0.5) * cell,
+          y: (point.y + 0.5) * cell,
+          vx: (Math.random() - 0.5) * 4,
+          vy: (Math.random() - 0.5) * 4,
+          life: 1
+        });
+      }
+    }
+
+    function updateStats() {
+      scoreEl.textContent = score;
+      lengthEl.textContent = snake.length;
+      modeEl.textContent = mode;
+      speedEl.textContent = speed;
+    }
+
+    function drawCell(point, fill, inset = 2) {
+      const x = point.x * cell + inset;
+      const y = point.y * cell + inset;
+      const w = cell - inset * 2;
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, y, w, w);
+    }
+
+    function drawSnakeImage(point, index) {
+      const inset = index === 0 ? 1.5 : 3;
+      const x = point.x * cell + inset;
+      const y = point.y * cell + inset;
+      const w = cell - inset * 2;
+      const radius = Math.max(5, w * 0.22);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + w - radius);
+      ctx.quadraticCurveTo(x + w, y + w, x + w - radius, y + w);
+      ctx.lineTo(x + radius, y + w);
+      ctx.quadraticCurveTo(x, y + w, x, y + w - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.clip();
+      ctx.drawImage(snakeImage, x, y, w, w);
+      ctx.restore();
+
+      ctx.strokeStyle = index === 0 ? "rgba(16, 32, 26, 0.72)" : "rgba(15, 159, 95, 0.42)";
+      ctx.lineWidth = index === 0 ? 2 : 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, w - 1);
+    }
+
+    function draw() {
+      const rect = canvas.getBoundingClientRect();
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      const gradient = ctx.createRadialGradient(rect.width * 0.5, rect.height * 0.5, 10, rect.width * 0.5, rect.height * 0.5, rect.width * 0.75);
+      gradient.addColorStop(0, "rgba(15, 159, 95, 0.08)");
+      gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, rect.width, rect.height);
+
+      drawCell(food, "#f0a202", 3);
+      ctx.shadowColor = "#f0a202";
+      ctx.shadowBlur = 20;
+      drawCell(food, "#f0a202", 6);
+      ctx.shadowBlur = 0;
+
+      snake.forEach((part, index) => {
+        const alpha = 1 - index / (snake.length * 1.45);
+        const fill = index === 0
+          ? "#10201a"
+          : `rgba(15, 159, 95, ${Math.max(0.42, alpha)})`;
+        ctx.shadowColor = index === 0 ? "#0f9f5f" : "transparent";
+        ctx.shadowBlur = index === 0 ? 18 : 0;
+        if (imageReady) {
+          drawSnakeImage(part, index);
+        } else {
+          drawCell(part, fill, index === 0 ? 2 : 3);
+        }
+      });
+      ctx.shadowBlur = 0;
+
+      particles = particles.filter((particle) => particle.life > 0);
+      for (const particle of particles) {
+        particle.x += particle.vx;
+        particle.y += particle.vy;
+        particle.life -= 0.035;
+        ctx.globalAlpha = Math.max(0, particle.life);
+        ctx.fillStyle = "#f0a202";
+        ctx.fillRect(particle.x, particle.y, 3, 3);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function loop(time) {
+      const interval = 1000 / speed;
+      if (!paused && time - lastTick > interval) {
+        step();
+        lastTick = time;
+      }
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    toggleBtn.addEventListener("click", () => {
+      paused = !paused;
+      toggleBtn.textContent = paused ? "继续" : "暂停";
+    });
+
+    document.getElementById("reset").addEventListener("click", reset);
+    document.getElementById("faster").addEventListener("click", () => {
+      speed = Math.min(20, speed + 2);
+      updateStats();
+    });
+    document.getElementById("slower").addEventListener("click", () => {
+      speed = Math.max(3, speed - 2);
+      updateStats();
+    });
+
+    window.addEventListener("resize", resize);
+    reset();
+    resize();
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
