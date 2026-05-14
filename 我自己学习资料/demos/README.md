@@ -65,5 +65,7 @@ https://github.com/zcxixixi/ai-course/issues
 标题格式：
 
 ```text
-第二节课作业 - 姓名
+第二节课作业 - 匿名编号或昵称
 ```
+
+不要提交真实姓名、学号、手机号、邮箱等个人敏感信息。
