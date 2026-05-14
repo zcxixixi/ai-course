@@ -1,0 +1,422 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo 01 - 自动贪吃蛇</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f2;
+      --panel: #ffffff;
+      --ink: #1f2933;
+      --muted: #697586;
+      --line: #d7ded0;
+      --snake: #1f8a5b;
+      --snake-head: #125c3c;
+      --food: #d94f30;
+      --grid: #e7eadf;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    main {
+      width: min(920px, 100%);
+      display: grid;
+      grid-template-columns: minmax(320px, 560px) minmax(220px, 1fr);
+      gap: 20px;
+      align-items: start;
+    }
+
+    .board-wrap,
+    .side {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 12px 32px rgba(31, 41, 51, 0.08);
+    }
+
+    .board-wrap {
+      padding: 16px;
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 1;
+      display: block;
+      border: 1px solid var(--line);
+      background: #fbfcf7;
+    }
+
+    .side {
+      padding: 18px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 24px;
+      line-height: 1.25;
+    }
+
+    p {
+      margin: 8px 0;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 18px 0;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcf7;
+    }
+
+    .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .controls {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    button {
+      min-height: 42px;
+      border: 1px solid var(--snake-head);
+      border-radius: 8px;
+      background: var(--snake-head);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--snake-head);
+    }
+
+    button:focus-visible {
+      outline: 3px solid rgba(31, 138, 91, 0.28);
+      outline-offset: 2px;
+    }
+
+    code {
+      color: var(--snake-head);
+      background: #edf4ec;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 760px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="board-wrap" aria-label="自动贪吃蛇画布">
+      <canvas id="game" width="560" height="560"></canvas>
+    </section>
+
+    <aside class="side">
+      <h1>自动贪吃蛇</h1>
+      <p>打开页面后，蛇会自己选择下一步，尽量靠近食物并避开身体和墙。</p>
+      <p>同学可以从 <code>chooseDirection()</code> 开始改，观察策略变化。</p>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="label">得分</span>
+          <span class="value" id="score">0</span>
+        </div>
+        <div class="stat">
+          <span class="label">步数</span>
+          <span class="value" id="steps">0</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button id="restart">重新开始</button>
+        <button class="secondary" id="toggle">暂停</button>
+      </div>
+
+      <p>也可以用方向键手动控制，手动输入会覆盖自动选择的一步。</p>
+    </aside>
+  </main>
+
+  <script>
+    const canvas = document.querySelector("#game");
+    const ctx = canvas.getContext("2d");
+    const scoreText = document.querySelector("#score");
+    const stepsText = document.querySelector("#steps");
+    const restartButton = document.querySelector("#restart");
+    const toggleButton = document.querySelector("#toggle");
+
+    const gridSize = 20;
+    const tileSize = canvas.width / gridSize;
+    const speed = 110;
+    const directions = [
+      { x: 0, y: -1, name: "up" },
+      { x: 1, y: 0, name: "right" },
+      { x: 0, y: 1, name: "down" },
+      { x: -1, y: 0, name: "left" }
+    ];
+
+    let snake;
+    let food;
+    let direction;
+    let pendingDirection;
+    let score;
+    let steps;
+    let timer;
+    let paused;
+
+    function resetGame() {
+      snake = [
+        { x: 9, y: 10 },
+        { x: 8, y: 10 },
+        { x: 7, y: 10 }
+      ];
+      direction = { x: 1, y: 0, name: "right" };
+      pendingDirection = null;
+      score = 0;
+      steps = 0;
+      paused = false;
+      placeFood();
+      updateText();
+      draw();
+      startLoop();
+    }
+
+    function startLoop() {
+      clearInterval(timer);
+      timer = setInterval(tick, speed);
+      toggleButton.textContent = "暂停";
+    }
+
+    function tick() {
+      if (paused) return;
+
+      direction = pendingDirection || chooseDirection();
+      pendingDirection = null;
+
+      const head = snake[0];
+      const next = { x: head.x + direction.x, y: head.y + direction.y };
+
+      if (isBlocked(next, true)) {
+        resetGame();
+        return;
+      }
+
+      snake.unshift(next);
+
+      if (next.x === food.x && next.y === food.y) {
+        score += 1;
+        placeFood();
+      } else {
+        snake.pop();
+      }
+
+      steps += 1;
+      updateText();
+      draw();
+    }
+
+    function chooseDirection() {
+      const head = snake[0];
+
+      const candidates = directions
+        .filter((nextDirection) => !isOpposite(nextDirection, direction))
+        .map((nextDirection) => {
+          const next = {
+            x: head.x + nextDirection.x,
+            y: head.y + nextDirection.y
+          };
+
+          return {
+            direction: nextDirection,
+            blocked: isBlocked(next, false),
+            distance: distanceToFood(next),
+            openSpace: countOpenNeighbors(next)
+          };
+        })
+        .filter((item) => !item.blocked)
+        .sort((a, b) => {
+          if (a.distance !== b.distance) return a.distance - b.distance;
+          return b.openSpace - a.openSpace;
+        });
+
+      return candidates[0]?.direction || direction;
+    }
+
+    function distanceToFood(point) {
+      return Math.abs(point.x - food.x) + Math.abs(point.y - food.y);
+    }
+
+    function countOpenNeighbors(point) {
+      return directions.reduce((total, nextDirection) => {
+        const next = {
+          x: point.x + nextDirection.x,
+          y: point.y + nextDirection.y
+        };
+        return total + (isBlocked(next, false) ? 0 : 1);
+      }, 0);
+    }
+
+    function isBlocked(point, includeTail) {
+      if (
+        point.x < 0 ||
+        point.x >= gridSize ||
+        point.y < 0 ||
+        point.y >= gridSize
+      ) {
+        return true;
+      }
+
+      const body = includeTail ? snake : snake.slice(0, -1);
+      return body.some((part) => part.x === point.x && part.y === point.y);
+    }
+
+    function isOpposite(nextDirection, currentDirection) {
+      return (
+        nextDirection.x + currentDirection.x === 0 &&
+        nextDirection.y + currentDirection.y === 0
+      );
+    }
+
+    function placeFood() {
+      do {
+        food = {
+          x: Math.floor(Math.random() * gridSize),
+          y: Math.floor(Math.random() * gridSize)
+        };
+      } while (snake.some((part) => part.x === food.x && part.y === food.y));
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+      drawFood();
+      drawSnake();
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue("--grid")
+        .trim();
+      ctx.lineWidth = 1;
+
+      for (let i = 0; i <= gridSize; i += 1) {
+        const position = i * tileSize;
+        ctx.beginPath();
+        ctx.moveTo(position, 0);
+        ctx.lineTo(position, canvas.height);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, position);
+        ctx.lineTo(canvas.width, position);
+        ctx.stroke();
+      }
+    }
+
+    function drawFood() {
+      ctx.fillStyle = getComputedStyle(document.documentElement)
+        .getPropertyValue("--food")
+        .trim();
+      drawRoundedTile(food.x, food.y, 8);
+    }
+
+    function drawSnake() {
+      snake.forEach((part, index) => {
+        ctx.fillStyle = index === 0
+          ? getComputedStyle(document.documentElement).getPropertyValue("--snake-head").trim()
+          : getComputedStyle(document.documentElement).getPropertyValue("--snake").trim();
+        drawRoundedTile(part.x, part.y, index === 0 ? 7 : 5);
+      });
+    }
+
+    function drawRoundedTile(x, y, radius) {
+      const gap = 3;
+      const left = x * tileSize + gap;
+      const top = y * tileSize + gap;
+      const size = tileSize - gap * 2;
+
+      ctx.beginPath();
+      ctx.roundRect(left, top, size, size, radius);
+      ctx.fill();
+    }
+
+    function updateText() {
+      scoreText.textContent = score;
+      stepsText.textContent = steps;
+    }
+
+    function setManualDirection(nextDirection) {
+      if (!isOpposite(nextDirection, direction)) {
+        pendingDirection = nextDirection;
+      }
+    }
+
+    document.addEventListener("keydown", (event) => {
+      const keyMap = {
+        ArrowUp: directions[0],
+        ArrowRight: directions[1],
+        ArrowDown: directions[2],
+        ArrowLeft: directions[3]
+      };
+
+      if (keyMap[event.key]) {
+        event.preventDefault();
+        setManualDirection(keyMap[event.key]);
+      }
+
+      if (event.key === " ") {
+        event.preventDefault();
+        paused = !paused;
+        toggleButton.textContent = paused ? "继续" : "暂停";
+      }
+    });
+
+    restartButton.addEventListener("click", resetGame);
+    toggleButton.addEventListener("click", () => {
+      paused = !paused;
+      toggleButton.textContent = paused ? "继续" : "暂停";
+    });
+
+    resetGame();
+  </script>
+</body>
+</html>

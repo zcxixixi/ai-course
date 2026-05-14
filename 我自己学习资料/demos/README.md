@@ -1,6 +1,24 @@
-# 演示页面
+# Demo 01：自动贪吃蛇
 
-可直接用浏览器打开的 HTML 演示：
+这个目录放课堂演示代码。
 
-- `ai-intro-animation.html`：人工智能课程开场动画。
-- `auto-snake.html`：自动贪吃蛇演示。
+## 运行方式
+
+直接双击打开：
+
+```text
+01-auto-snake/index.html
+```
+
+也可以在当前目录启动本地服务：
+
+```bash
+python3 -m http.server 8000
+```
+
+然后访问：
+
+```text
+http://localhost:8000/01-auto-snake/
+```
+
