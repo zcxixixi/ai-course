@@ -19,6 +19,7 @@
 ```text
 02-yolo-webcam/
 ├── app.py              # OpenCV 桌面窗口版本
+├── cli_detect.py       # 命令行输出版本
 ├── web_app.py          # Flask 网页版本
 ├── requirements.txt    # Python 依赖
 ├── templates/          # 网页 HTML
@@ -80,6 +81,30 @@ python web_app.py --model small
 ```
 
 默认是 `nano` 模型，也就是 `yolov8n.pt`，速度最快。`small` 模型更大，识别效果可能更好，但速度会慢。
+
+## 命令行版本
+
+如果只想在终端里看识别结果，不打开网页：
+
+```bash
+python cli_detect.py
+```
+
+输出示例：
+
+```text
+YOLO 命令行识别已启动。按 Ctrl+C 停止。
+模型：yolov8n.pt | 摄像头：0 | 置信度：0.35
+[15:20:01] person x1, cup x1 | person 0.84, cup 0.63
+```
+
+常用参数：
+
+```bash
+python cli_detect.py --camera 1
+python cli_detect.py --conf 0.5
+python cli_detect.py --interval 2
+```
 
 ## 桌面窗口版本
 

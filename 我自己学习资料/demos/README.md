@@ -49,3 +49,21 @@ py -m venv .venv
 pip install -r requirements.txt
 python web_app.py
 ```
+
+命令行简版：
+
+```bash
+python cli_detect.py
+```
+
+第二节课作业提交到 GitHub Issues：
+
+```text
+https://github.com/zcxixixi/ai-course/issues
+```
+
+标题格式：
+
+```text
+第二节课作业 - 姓名
+```

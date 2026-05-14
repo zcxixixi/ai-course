@@ -23,6 +23,98 @@
 7. 自然语言处理
 8. 大模型与 AIGC
 
+## 第二节课任务
+
+本节课目标：把课程仓库克隆到本地，成功跑通一个 demo，并把自己的运行结果提交到 GitHub Issues。
+
+### 1. 克隆仓库
+
+```bash
+git clone https://github.com/zcxixixi/ai-course.git
+cd ai-course
+```
+
+### 2. 运行 demo
+
+优先选择下面任意一个 demo 跑通。
+
+#### Demo 01：自动贪吃蛇
+
+直接用浏览器打开：
+
+```text
+我自己学习资料/demos/01-auto-snake/index.html
+```
+
+也可以启动本地服务：
+
+```bash
+cd "我自己学习资料/demos"
+python3 -m http.server 8000
+```
+
+然后访问：
+
+```text
+http://localhost:8000/01-auto-snake/
+```
+
+#### Demo 02：YOLO 摄像头识别
+
+Mac：
+
+```bash
+cd "我自己学习资料/demos/02-yolo-webcam"
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python web_app.py
+```
+
+Windows PowerShell：
+
+```powershell
+cd "我自己学习资料\demos\02-yolo-webcam"
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python web_app.py
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:5001
+```
+
+如果网页版本不方便，也可以跑命令行简版：
+
+```bash
+python cli_detect.py
+```
+
+### 3. 提交作业到 Issues
+
+进入 GitHub 仓库的 Issues 页面：
+
+```text
+https://github.com/zcxixixi/ai-course/issues
+```
+
+新建一个 Issue，标题格式：
+
+```text
+第二节课作业 - 姓名
+```
+
+Issue 内容至少包含：
+
+- 你运行的是哪个 demo
+- 你的电脑系统：Mac 或 Windows
+- 运行成功的截图，或命令行输出
+- 遇到的问题，以及你是怎么解决的
+- 你对 demo 做了什么小修改，哪怕只是改文字、参数、颜色也可以
+
 ## 维护方式
 
 每次课程迭代后更新对应 notebook，并提交到 GitHub，保留清晰版本记录。
