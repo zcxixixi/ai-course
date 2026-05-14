@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo 02 - YOLO 摄像头实时识别</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <main class="app">
+    <section class="viewer" aria-label="YOLO 识别画面">
+      <div class="video-shell">
+        <video id="cameraPreview" autoplay muted playsinline></video>
+        <canvas id="captureCanvas"></canvas>
+        <img
+          id="frame"
+          src="{% if webcam_enabled %}{{ url_for('stream') }}{% endif %}"
+          alt="YOLO 实时识别画面"
+        />
+        <div class="loading" id="loading">
+          <strong>正在连接摄像头</strong>
+          <span>浏览器弹出权限提示时，请点击允许</span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <div class="title-block">
+        <span class="eyebrow">Computer Vision Demo</span>
+        <h1>YOLO 实时物体识别</h1>
+        <p>浏览器读取摄像头画面，Python 后端调用 YOLO 识别物体，再把标注结果展示到网页。</p>
+      </div>
+
+      <section class="upload-box" aria-label="上传图片">
+        <label class="upload-button" for="imageInput">选择图片识别</label>
+        <input id="imageInput" type="file" accept="image/*" />
+        <p id="message">摄像头无法授权时，可临时用图片测试模型。</p>
+      </section>
+
+      <div class="stats" aria-label="识别状态">
+        <div class="stat">
+          <span>FPS</span>
+          <strong id="fps">0.0</strong>
+        </div>
+        <div class="stat">
+          <span>识别数量</span>
+          <strong id="detections">0</strong>
+        </div>
+        <div class="stat">
+          <span>模型</span>
+          <strong id="model">-</strong>
+        </div>
+        <div class="stat">
+          <span>摄像头</span>
+          <strong id="camera">0</strong>
+        </div>
+      </div>
+
+      <section class="control-group" aria-label="置信度控制">
+        <div class="control-head">
+          <label for="confidence">置信度阈值</label>
+          <output id="confidenceValue" for="confidence">0.35</output>
+        </div>
+        <input id="confidence" type="range" min="0.05" max="0.95" step="0.05" value="0.35" />
+        <p>数值越高，模型越保守；数值越低，检测结果更多但误识别也会增加。</p>
+      </section>
+
+      <section class="steps" aria-label="课堂观察点">
+        <h2>课堂观察点</h2>
+        <ol>
+          <li>把不同物体放到镜头前，观察类别和置信度。</li>
+          <li>调整阈值，看识别数量如何变化。</li>
+          <li>用 small 模型重新启动，对比识别效果。</li>
+        </ol>
+        <div class="result-list" id="resultList"></div>
+      </section>
+    </aside>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

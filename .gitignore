@@ -12,3 +12,6 @@ env/
 官方文档/**/*.pdf
 官方文档/**/*.docx
 官方文档/**/*.rar
+
+# YOLO demo 会在第一次运行时自动下载模型权重，不提交到仓库。
+我自己学习资料/demos/02-yolo-webcam/yolov8*.pt
