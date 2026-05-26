@@ -54,6 +54,7 @@ JSON 格式：
 
 
 AUTO_GRADE_MARKER = "<!-- ai-course-auto-grade -->"
+AUTO_GRADE_TITLE = "自动批改反馈："
 
 
 DISCUSSION_QUERY = """
@@ -185,7 +186,11 @@ def fetch_comments(owner: str, repo: str, number: int, token: str) -> tuple[str,
                     url=node["url"],
                     created_at=node["createdAt"],
                     updated_at=node["updatedAt"],
-                    has_grade_reply=any(AUTO_GRADE_MARKER in (reply["bodyText"] or "") for reply in replies),
+                    has_grade_reply=any(
+                        AUTO_GRADE_MARKER in (reply["bodyText"] or "")
+                        or AUTO_GRADE_TITLE in (reply["bodyText"] or "")
+                        for reply in replies
+                    ),
                 )
             )
 
@@ -246,7 +251,7 @@ def format_reply(result: dict[str, Any]) -> str:
 
     lines = [
         AUTO_GRADE_MARKER,
-        "自动批改反馈：",
+        AUTO_GRADE_TITLE,
         "",
         f"分数：{score}/100",
         "",
