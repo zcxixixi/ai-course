@@ -1,0 +1,43 @@
+name: Grade GitHub Discussion
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  discussions: write
+
+concurrency:
+  group: grade-discussion-17
+  cancel-in-progress: false
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Grade and reply
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.vectorengine.ai/v1' }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'qwen-flash' }}
+          REPO_OWNER: zcxixixi
+          REPO_NAME: ai-course
+          DISCUSSION_NUMBER: "17"
+        run: python scripts/grade_github_discussion.py --post-replies

@@ -9,6 +9,7 @@ graphviz
 tqdm
 python-dotenv
 openai
+requests
 tiktoken
 scikit-learn
 scipy
