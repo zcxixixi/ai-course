@@ -4,6 +4,10 @@
 
 本仓库用于维护 8 次人工智能课程资料。
 
+## 课程录屏
+
+- B 站课程录屏：[研究生人工智能课程录屏](https://www.bilibili.com/video/BV1Nd596vE5e/?spm_id_from=333.1387.homepage.video_card.click&vd_source=996a8a0d9f9231a59e4eabcd3bffa671)
+
 ## 目录结构
 
 - `官方文档/`：学校或官方提供的原始课件，按课程主题分目录保存。
