@@ -1,6 +1,8 @@
 name: Grade GitHub Discussion
 
 on:
+  discussion_comment:
+    types: [created]
   schedule:
     - cron: "0 * * * *"
   workflow_dispatch:
