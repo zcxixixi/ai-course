@@ -10,12 +10,16 @@ permissions:
   discussions: write
 
 concurrency:
-  group: grade-discussion-17
+  group: grade-discussion-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   grade:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        discussion: [17, 20]
 
     steps:
       - name: Checkout
@@ -39,5 +43,5 @@ jobs:
           OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'qwen-flash' }}
           REPO_OWNER: zcxixixi
           REPO_NAME: ai-course
-          DISCUSSION_NUMBER: "17"
+          DISCUSSION_NUMBER: ${{ matrix.discussion }}
         run: python scripts/grade_github_discussion.py --post-replies

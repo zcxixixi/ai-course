@@ -18,25 +18,20 @@ from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 
 
-DEFAULT_RUBRIC = """你是 AI 课程助教。请批改学生对 GitHub Discussion 的回复。
+DEFAULT_RUBRIC = """你是 AI 课程助教。请根据 GitHub Discussion 的题目和正文批改学生回复。
 
-讨论题目：
-1. AI、大模型、Agent、机器学习、深度学习之间的关系
-2. 大模型是怎么生成和输出内容的
-3. 模型训练的过程
-4. 是否体现自己理解，而不是直接复制 AI 回答
-
-评分标准，总分 100：
-- 概念关系清楚：30 分
-- 大模型输出机制解释合理：25 分
-- 模型训练过程解释合理：25 分
-- 表达清晰、有自己理解：20 分
+通用评分标准，总分 100：
+- 是否围绕本次讨论题目回答：30 分
+- 概念是否准确、逻辑是否清楚：30 分
+- 是否能结合例子或场景说明：20 分
+- 是否体现自己的理解，表达是否清晰：20 分
 
 批改要求：
 - 评语要简洁、具体、可执行。
 - 只要回答基本围绕题目、体现了真实理解，就算合格，最低给 80 分。
 - 合格回答的分数区间是 80-100 分，不要给 1-79 分。
 - 如果明显乱回、空话、跑题、灌水、复制无关内容，直接给 0 分。
+- 如果讨论正文说明“不要求覆盖所有问题”或“选择部分问题即可”，不要因为学生没有覆盖全部问题而重扣分。
 - 如果回答明显像直接复制 AI，请在 ai_copy_risk 中标为 medium 或 high，并说明原因。
 - 不要因为语言不华丽而扣太多分，重点看理解是否正确。
 - 严格返回 JSON，不要返回 Markdown。
@@ -63,6 +58,7 @@ query($owner:String!, $repo:String!, $number:Int!, $after:String) {
     discussion(number:$number) {
       id
       title
+      bodyText
       comments(first:100, after:$after) {
         pageInfo {
           hasNextPage
@@ -157,10 +153,11 @@ def github_graphql(token: str, query: str, variables: dict[str, Any]) -> dict[st
     return payload["data"]
 
 
-def fetch_comments(owner: str, repo: str, number: int, token: str) -> tuple[str, str, list[DiscussionComment]]:
+def fetch_comments(owner: str, repo: str, number: int, token: str) -> tuple[str, str, str, list[DiscussionComment]]:
     comments: list[DiscussionComment] = []
     after = None
     title = ""
+    body = ""
     discussion_id = ""
 
     while True:
@@ -174,6 +171,7 @@ def fetch_comments(owner: str, repo: str, number: int, token: str) -> tuple[str,
             fail(f"找不到 discussion #{number}")
 
         title = discussion["title"]
+        body = discussion["bodyText"] or ""
         discussion_id = discussion["id"]
         page = discussion["comments"]
         for node in page["nodes"]:
@@ -198,7 +196,7 @@ def fetch_comments(owner: str, repo: str, number: int, token: str) -> tuple[str,
             break
         after = page["pageInfo"]["endCursor"]
 
-    return discussion_id, title, comments
+    return discussion_id, title, body, comments
 
 
 def parse_grade(raw: str) -> dict[str, Any]:
@@ -212,7 +210,13 @@ def parse_grade(raw: str) -> dict[str, Any]:
         raise
 
 
-def grade_comment(client: OpenAI, model: str, discussion_title: str, comment: DiscussionComment) -> dict[str, Any]:
+def grade_comment(
+    client: OpenAI,
+    model: str,
+    discussion_title: str,
+    discussion_body: str,
+    comment: DiscussionComment,
+) -> dict[str, Any]:
     try:
         response = client.chat.completions.create(
             model=model,
@@ -223,6 +227,7 @@ def grade_comment(client: OpenAI, model: str, discussion_title: str, comment: Di
                     "role": "user",
                     "content": (
                         f"Discussion 标题：{discussion_title}\n"
+                        f"Discussion 正文：\n{discussion_body}\n\n"
                         f"学生 GitHub 用户名：{comment.author}\n"
                         f"评论链接：{comment.url}\n\n"
                         f"学生回答：\n{comment.body}"
@@ -373,7 +378,7 @@ def run_self_test(client: OpenAI, model: str) -> None:
     ]
 
     for sample in samples:
-        result = grade_comment(client, model, "自测", sample)
+        result = grade_comment(client, model, "自测", "请解释机器学习基础概念，并结合例子说明。", sample)
         print(json.dumps({"author": sample.author, "score": result.get("score"), "comment": result.get("comment")}, ensure_ascii=False))
 
 
@@ -393,7 +398,7 @@ def main() -> None:
         run_self_test(client, args.model)
         return
 
-    discussion_id, title, comments = fetch_comments(args.owner, args.repo, args.discussion, github_token)
+    discussion_id, title, discussion_body, comments = fetch_comments(args.owner, args.repo, args.discussion, github_token)
     comments = [comment for comment in comments if comment.body.strip()]
     if args.limit > 0:
         comments = comments[: args.limit]
@@ -404,7 +409,7 @@ def main() -> None:
     results: list[dict[str, Any]] = []
     for index, comment in enumerate(comments, start=1):
         print(f"[{index}/{len(comments)}] 批改 {comment.author} ...")
-        result = grade_comment(client, args.model, title, comment)
+        result = grade_comment(client, args.model, title, discussion_body, comment)
 
         if args.post_replies:
             if comment.has_grade_reply and not args.force_post:

@@ -77,6 +77,13 @@ python scripts/grade_github_discussion.py --self-test
 
 仓库里已经提供 `.github/workflows/grade-discussion.yml`，默认每小时自动运行一次，也可以在 GitHub Actions 页面手动触发。
 
+当前自动批改的 Discussion：
+
+```text
+#17 课后讨论：AI、大模型、Agent 与模型训练
+#20 课后讨论：机器学习基础概念与应用场景
+```
+
 需要在仓库设置里添加 Secret：
 
 ```text
