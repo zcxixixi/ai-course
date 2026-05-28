@@ -69,3 +69,51 @@ https://github.com/zcxixixi/ai-course/issues
 ```
 
 不要提交真实姓名、学号、手机号、邮箱等个人敏感信息。
+
+## 03：机器学习回归入门
+
+路径：
+
+```text
+03-ml-regression-basic/
+```
+
+用途：布置一个最小机器学习任务，让学生跑通“表格数据预测价格”的完整流程。
+
+核心内容：
+
+- 读取汽车价格数据
+- 清洗列名和文本字段
+- 划分训练集、验证集、测试集
+- 训练线性回归模型
+- 用 RMSE 判断模型好坏
+
+运行：
+
+```bash
+cd "03-ml-regression-basic"
+python3 demo.py
+```
+
+任务文件：
+
+```text
+03-ml-regression-basic/task.md
+```
+
+## 04：阅读理解 Demo
+
+路径：
+
+```text
+04-reading-comprehension/
+```
+
+学习“阅读材料、定位证据、组织答案”的基础流程。
+
+运行：
+
+```bash
+cd "04-reading-comprehension"
+python3 demo.py
+```
