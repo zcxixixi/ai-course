@@ -18,6 +18,7 @@
 
 - `官方文档/`：学校或官方提供的原始课件，按课程主题分目录保存。
 - `我自己学习资料/notebooks/`：我们共同维护的课堂讲义与代码实验，优先使用 Jupyter Notebook。
+- `我自己学习资料/courses/`：外部课程内容和课堂阅读材料。
 - `我自己学习资料/assets/`：图片、图表、截图等素材。
 - `我自己学习资料/datasets/`：课堂示例数据集或数据说明。
 - `我自己学习资料/demos/`：课堂 demo，包含网页演示和 Python 实验任务。
@@ -39,6 +40,7 @@
 
 - 第二节课：运行 demo，理解大模型和 Agent 区别，提交到 GitHub Issues。
 - 第三节课：参与 GitHub Discussion 讨论，运行阅读理解 demo，并提交答案和证据。
+- 第四节课：阅读 `courses/nn-zero-to-hero` 的神经网络内容，发到 Discussion，并跑通 Demo 05。
 
 ## 第二节课任务
 
@@ -264,6 +266,62 @@ python demo.py
 - 自己新增 1 个问题，并给出答案和证据
 
 隐私提醒：不要提交真实姓名、学号、手机号、邮箱、证件号等个人敏感信息。
+
+## 第四节课任务
+
+本节课目标：阅读神经网络课程内容，写出自己的理解，并跑通神经网络互动 demo。
+
+### 1. 阅读课程内容
+
+阅读路径：
+
+```text
+我自己学习资料/courses/nn-zero-to-hero/README.md
+```
+
+重点看：
+
+- Lecture 1：反向传播和 micrograd
+- Lecture 3：MLP
+- Lecture 6：CNN
+
+### 2. 发到 Discussion
+
+进入 GitHub Discussions：
+
+```text
+https://github.com/zcxixixi/ai-course/discussions
+```
+
+选择第四节课讨论帖，回复：
+
+- 你看了哪一部分内容
+- 你理解的 MLP 是什么
+- 你理解的 CNN 和 MLP 有什么不同
+- 你还没理解的 1 个问题
+
+### 3. 跑通 Demo 05
+
+直接打开：
+
+```text
+我自己学习资料/demos/05-neural-network-playground/index.html
+```
+
+或启动本地服务：
+
+```bash
+cd "我自己学习资料/demos"
+python3 -m http.server 8000
+```
+
+访问：
+
+```text
+http://localhost:8000/05-neural-network-playground/
+```
+
+提交时补充 demo 截图或运行结果。
 
 ## 维护方式
 
