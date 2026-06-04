@@ -1,0 +1,890 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo 05 - 神经网络互动入门</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f6f8;
+      --panel: #ffffff;
+      --ink: #17202a;
+      --muted: #667085;
+      --line: #d9e1ea;
+      --accent: #176b87;
+      --accent-strong: #0f4c5c;
+      --good: #1f8a5b;
+      --warn: #c56b1a;
+      --soft: #edf6f8;
+      --canvas: #fbfcfe;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    main {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: 18px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(26px, 4vw, 42px);
+      line-height: 1.15;
+    }
+
+    .lead {
+      max-width: 620px;
+      margin-top: 8px;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .tabs {
+      display: inline-flex;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .tab {
+      min-height: 38px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .tab.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .section {
+      display: none;
+    }
+
+    .section.active {
+      display: block;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(320px, 470px) minmax(360px, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel,
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 10px 28px rgba(23, 32, 42, 0.06);
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .panel-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      font-size: 22px;
+      line-height: 1.3;
+    }
+
+    h3 {
+      font-size: 15px;
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--accent-strong);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      background: var(--canvas);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      touch-action: none;
+    }
+
+    #digitCanvas {
+      aspect-ratio: 1;
+      cursor: crosshair;
+    }
+
+    #imagePreview {
+      width: 100%;
+      aspect-ratio: 1;
+      display: block;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    button {
+      min-height: 40px;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 0 13px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .upload-button {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 0 13px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    input[type="file"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+    }
+
+    button.secondary {
+      background: #fff;
+      color: var(--accent);
+    }
+
+    button:focus-visible,
+    .upload-button:focus-visible,
+    .tab:focus-visible {
+      outline: 3px solid rgba(23, 107, 135, 0.25);
+      outline-offset: 2px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .stat {
+      min-height: 76px;
+      padding: 11px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+
+    .label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 7px;
+    }
+
+    .value {
+      display: block;
+      font-size: 26px;
+      line-height: 1.1;
+      font-weight: 800;
+    }
+
+    .note {
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .bars {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 42px 1fr 46px;
+      gap: 9px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .bar-track {
+      height: 12px;
+      border-radius: 999px;
+      background: #e8edf3;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 160ms ease;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .flow .card {
+      min-height: 112px;
+      padding: 12px;
+      box-shadow: none;
+    }
+
+    .flow-value {
+      margin-top: 10px;
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--accent-strong);
+    }
+
+    .samples {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .sample {
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .sample.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(23, 107, 135, 0.16);
+    }
+
+    .sample canvas {
+      aspect-ratio: 1;
+      border-radius: 6px;
+    }
+
+    .sample span {
+      display: block;
+      margin-top: 7px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .feature-grid canvas {
+      aspect-ratio: 1;
+    }
+
+    .result {
+      min-height: 44px;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--accent-strong);
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 860px) {
+      header,
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      header {
+        display: grid;
+        align-items: start;
+      }
+
+      .flow,
+      .samples,
+      .feature-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 520px) {
+      main {
+        padding: 16px;
+      }
+
+      .stats,
+      .flow {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>神经网络互动入门</h1>
+        <p class="lead">两个真实小模型示例：手写数字识别使用开源 MNIST MLP，图像分类使用轻量版 TensorFlow.js MobileNet。首次运行需要联网加载 CNN 模型。</p>
+      </div>
+      <nav class="tabs" aria-label="示例切换">
+        <button class="tab active" data-tab="mlp">MLP 手写数字</button>
+        <button class="tab" data-tab="cnn">CNN 图像分类</button>
+      </nav>
+    </header>
+
+    <section class="section active" id="mlpSection">
+      <div class="workspace">
+        <article class="panel">
+          <div class="panel-title">
+            <h2>手写数字小游戏</h2>
+            <span class="tag">输入 28 x 28</span>
+          </div>
+          <canvas id="digitCanvas" width="280" height="280" aria-label="手写数字画布"></canvas>
+          <div class="controls">
+            <button id="predictDigit">预测</button>
+            <button class="secondary" id="clearDigit">清空</button>
+            <button class="secondary" id="nextTarget">换一个目标</button>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <span class="label">目标</span>
+              <span class="value" id="targetDigit">3</span>
+            </div>
+            <div class="stat">
+              <span class="label">预测</span>
+              <span class="value" id="predictedDigit">-</span>
+            </div>
+            <div class="stat">
+              <span class="label">得分</span>
+              <span class="value" id="digitScore">0</span>
+            </div>
+          </div>
+          <p class="note">玩法：按目标数字手写，点击预测。模型会把手写内容压成 28 x 28，再输入公开 MNIST MLP。</p>
+        </article>
+
+        <article class="panel grid">
+          <div>
+            <div class="panel-title">
+              <h2>MLP 如何工作</h2>
+              <span class="tag">像素 -> 隐藏层 -> 概率</span>
+            </div>
+            <div class="flow">
+              <div class="card">
+                <h3>输入层</h3>
+                <p class="note">784 个像素值</p>
+                <div class="flow-value" id="inkValue">0%</div>
+              </div>
+              <div class="card">
+                <h3>隐藏层 1</h3>
+                <p class="note">Dense 512 + ReLU</p>
+                <div class="flow-value" id="hiddenOne">512</div>
+              </div>
+              <div class="card">
+                <h3>隐藏层 2</h3>
+                <p class="note">Dense 512 + ReLU</p>
+                <div class="flow-value" id="hiddenTwo">512</div>
+              </div>
+              <div class="card">
+                <h3>输出层</h3>
+                <p class="note">10 类概率</p>
+                <div class="flow-value" id="confidenceValue">0%</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3>数字概率</h3>
+            <div class="bars" id="digitBars"></div>
+          </div>
+          <div class="result" id="mlpResult">先写一个数字，再点击预测。</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="cnnSection">
+      <div class="workspace">
+        <article class="panel">
+          <div class="panel-title">
+            <h2>上传一张图片</h2>
+            <span class="tag">MobileNet 0.25</span>
+          </div>
+          <img id="imagePreview" alt="待分类图片预览" />
+          <div class="controls">
+            <label class="upload-button" for="imageUpload">选择图片</label>
+            <input id="imageUpload" type="file" accept="image/*" />
+            <button id="classifyImage">分类</button>
+          </div>
+          <p class="note">建议上传常见物体照片，例如杯子、键盘、汽车、花、食物。这里使用轻量版 MobileNet，速度优先。</p>
+        </article>
+
+        <article class="panel grid">
+          <div class="panel-title">
+            <h2>CNN 图像分类</h2>
+            <span class="tag">卷积 -> 池化 -> 分类</span>
+          </div>
+          <div class="feature-grid">
+            <div>
+              <h3>原图</h3>
+              <canvas id="sourceMap" width="160" height="160"></canvas>
+            </div>
+            <div>
+              <h3>亮度边缘</h3>
+              <canvas id="verticalMap" width="160" height="160"></canvas>
+            </div>
+            <div>
+              <h3>纹理响应</h3>
+              <canvas id="horizontalMap" width="160" height="160"></canvas>
+            </div>
+          </div>
+          <div>
+            <h3>分类概率</h3>
+            <div class="bars" id="cnnBars"></div>
+          </div>
+          <div class="result" id="cnnResult">请先上传图片，模型加载完成后点击分类。</div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+  <script>
+    const tabs = document.querySelectorAll(".tab");
+    const mlpSection = document.querySelector("#mlpSection");
+    const cnnSection = document.querySelector("#cnnSection");
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        tabs.forEach((item) => item.classList.remove("active"));
+        tab.classList.add("active");
+        mlpSection.classList.toggle("active", tab.dataset.tab === "mlp");
+        cnnSection.classList.toggle("active", tab.dataset.tab === "cnn");
+      });
+    });
+
+    const digitCanvas = document.querySelector("#digitCanvas");
+    const digitCtx = digitCanvas.getContext("2d", { willReadFrequently: true });
+    const targetDigitText = document.querySelector("#targetDigit");
+    const predictedDigitText = document.querySelector("#predictedDigit");
+    const digitScoreText = document.querySelector("#digitScore");
+    const mlpResult = document.querySelector("#mlpResult");
+    const inkValue = document.querySelector("#inkValue");
+    const hiddenOne = document.querySelector("#hiddenOne");
+    const hiddenTwo = document.querySelector("#hiddenTwo");
+    const confidenceValue = document.querySelector("#confidenceValue");
+    const digitBars = document.querySelector("#digitBars");
+
+    let drawing = false;
+    let lastPoint = null;
+    let targetDigit = 3;
+    let digitScore = 0;
+    let mnistModel = null;
+    let mobileNetModel = null;
+    const mnistModelUrl = "models/digitrecognizermlp/model.json";
+
+    function setupDigitCanvas() {
+      digitCtx.fillStyle = "#ffffff";
+      digitCtx.fillRect(0, 0, digitCanvas.width, digitCanvas.height);
+      digitCtx.lineCap = "round";
+      digitCtx.lineJoin = "round";
+      digitCtx.lineWidth = 24;
+      digitCtx.strokeStyle = "#111827";
+    }
+
+    function pointerPosition(event) {
+      const rect = digitCanvas.getBoundingClientRect();
+      const point = event.touches ? event.touches[0] : event;
+      return {
+        x: ((point.clientX - rect.left) / rect.width) * digitCanvas.width,
+        y: ((point.clientY - rect.top) / rect.height) * digitCanvas.height
+      };
+    }
+
+    function startDrawing(event) {
+      event.preventDefault();
+      drawing = true;
+      lastPoint = pointerPosition(event);
+    }
+
+    function drawDigit(event) {
+      if (!drawing) return;
+      event.preventDefault();
+      const point = pointerPosition(event);
+      digitCtx.beginPath();
+      digitCtx.moveTo(lastPoint.x, lastPoint.y);
+      digitCtx.lineTo(point.x, point.y);
+      digitCtx.stroke();
+      lastPoint = point;
+    }
+
+    function stopDrawing() {
+      drawing = false;
+      lastPoint = null;
+    }
+
+    function extractDigitTensor() {
+      const image = digitCtx.getImageData(0, 0, digitCanvas.width, digitCanvas.height).data;
+      let minX = digitCanvas.width;
+      let minY = digitCanvas.height;
+      let maxX = 0;
+      let maxY = 0;
+      let hasInk = false;
+
+      for (let y = 0; y < digitCanvas.height; y += 1) {
+        for (let x = 0; x < digitCanvas.width; x += 1) {
+          const index = (y * digitCanvas.width + x) * 4;
+          if (255 - image[index] > 35) {
+            hasInk = true;
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      }
+
+      if (!hasInk) {
+        return null;
+      }
+
+      const boxWidth = maxX - minX + 1;
+      const boxHeight = maxY - minY + 1;
+      const side = Math.max(boxWidth, boxHeight);
+      const padding = Math.round(side * 0.28);
+      const cropX = Math.max(0, minX - padding);
+      const cropY = Math.max(0, minY - padding);
+      const cropSide = Math.min(digitCanvas.width - cropX, digitCanvas.height - cropY, side + padding * 2);
+
+      const prepared = document.createElement("canvas");
+      prepared.width = 28;
+      prepared.height = 28;
+      const ctx = prepared.getContext("2d", { willReadFrequently: true });
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, 28, 28);
+      ctx.filter = "invert(1) grayscale(1)";
+      ctx.drawImage(digitCanvas, cropX, cropY, cropSide, cropSide, 0, 0, 28, 28);
+      ctx.filter = "none";
+
+      const data = ctx.getImageData(0, 0, 28, 28).data;
+      const values = [];
+      for (let i = 0; i < data.length; i += 4) {
+        values.push(data[i] / 255);
+      }
+
+      return {
+        tensor: tf.tensor2d([values], [1, 784]),
+        ink: values.reduce((total, item) => total + item, 0) / values.length
+      };
+    }
+
+    function softmax(scores) {
+      const max = Math.max(...scores);
+      const exp = scores.map((score) => Math.exp((score - max) * 7));
+      const sum = exp.reduce((total, item) => total + item, 0);
+      return exp.map((item) => item / sum);
+    }
+
+    async function predictDigit() {
+      if (!mnistModel) {
+        mlpResult.textContent = "MNIST MLP 模型还在加载，请稍等。";
+        return;
+      }
+
+      const prepared = extractDigitTensor();
+      if (!prepared) {
+        mlpResult.textContent = "画布是空的，请先写一个数字。";
+        return;
+      }
+
+      const output = mnistModel.predict(prepared.tensor);
+      const probabilities = Array.from(await output.data());
+      prepared.tensor.dispose();
+      output.dispose();
+
+      const prediction = probabilities.indexOf(Math.max(...probabilities));
+      const confidence = probabilities[prediction];
+
+      predictedDigitText.textContent = String(prediction);
+      inkValue.textContent = `${Math.round(prepared.ink * 100)}%`;
+      hiddenOne.textContent = "512";
+      hiddenTwo.textContent = "512";
+      confidenceValue.textContent = `${Math.round(confidence * 100)}%`;
+      updateBars(digitBars, probabilities, probabilities.map((_, index) => String(index)));
+
+      if (prediction === targetDigit) {
+        digitScore += 1;
+        mlpResult.textContent = `预测正确：目标 ${targetDigit}，模型认为最像 ${prediction}。`;
+        mlpResult.style.color = "var(--good)";
+      } else {
+        mlpResult.textContent = `预测为 ${prediction}，目标是 ${targetDigit}。可以把关键笔画写得更完整。`;
+        mlpResult.style.color = "var(--warn)";
+      }
+
+      digitScoreText.textContent = String(digitScore);
+    }
+
+    function nextTarget() {
+      targetDigit = Math.floor(Math.random() * 10);
+      targetDigitText.textContent = String(targetDigit);
+      predictedDigitText.textContent = "-";
+      mlpResult.textContent = "按新目标写一个数字，再点击预测。";
+      mlpResult.style.color = "var(--accent-strong)";
+      setupDigitCanvas();
+    }
+
+    function updateBars(container, values, labels) {
+      container.innerHTML = "";
+      values.forEach((value, index) => {
+        const row = document.createElement("div");
+        row.className = "bar-row";
+        row.innerHTML = `
+          <span>${labels[index]}</span>
+          <span class="bar-track"><span class="bar-fill" style="width:${Math.round(value * 100)}%"></span></span>
+          <span>${Math.round(value * 100)}%</span>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    digitCanvas.addEventListener("mousedown", startDrawing);
+    digitCanvas.addEventListener("mousemove", drawDigit);
+    window.addEventListener("mouseup", stopDrawing);
+    digitCanvas.addEventListener("touchstart", startDrawing, { passive: false });
+    digitCanvas.addEventListener("touchmove", drawDigit, { passive: false });
+    window.addEventListener("touchend", stopDrawing);
+    document.querySelector("#predictDigit").addEventListener("click", predictDigit);
+    document.querySelector("#clearDigit").addEventListener("click", setupDigitCanvas);
+    document.querySelector("#nextTarget").addEventListener("click", nextTarget);
+
+    const imagePreview = document.querySelector("#imagePreview");
+    const imageUpload = document.querySelector("#imageUpload");
+    const sourceMap = document.querySelector("#sourceMap");
+    const verticalMap = document.querySelector("#verticalMap");
+    const horizontalMap = document.querySelector("#horizontalMap");
+    const cnnBars = document.querySelector("#cnnBars");
+    const cnnResult = document.querySelector("#cnnResult");
+
+    function imageMatrix(source) {
+      const size = 32;
+      const temp = document.createElement("canvas");
+      temp.width = size;
+      temp.height = size;
+      const ctx = temp.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(source, 0, 0, size, size);
+      const data = ctx.getImageData(0, 0, size, size).data;
+      const matrix = [];
+      for (let y = 0; y < size; y += 1) {
+        const row = [];
+        for (let x = 0; x < size; x += 1) {
+          const index = (y * size + x) * 4;
+          row.push((255 - data[index]) / 255);
+        }
+        matrix.push(row);
+      }
+      return matrix;
+    }
+
+    function convolve(matrix, kernel) {
+      const output = [];
+      for (let y = 1; y < matrix.length - 1; y += 1) {
+        const row = [];
+        for (let x = 1; x < matrix[y].length - 1; x += 1) {
+          let value = 0;
+          for (let ky = -1; ky <= 1; ky += 1) {
+            for (let kx = -1; kx <= 1; kx += 1) {
+              value += matrix[y + ky][x + kx] * kernel[ky + 1][kx + 1];
+            }
+          }
+          row.push(Math.max(0, Math.min(1, Math.abs(value))));
+        }
+        output.push(row);
+      }
+      return output;
+    }
+
+    function drawMatrix(canvas, matrix) {
+      const ctx = canvas.getContext("2d");
+      const cell = canvas.width / matrix.length;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (let y = 0; y < matrix.length; y += 1) {
+        for (let x = 0; x < matrix[y].length; x += 1) {
+          const value = Math.floor(255 - matrix[y][x] * 235);
+          ctx.fillStyle = `rgb(${value}, ${value}, ${value})`;
+          ctx.fillRect(x * cell, y * cell, Math.ceil(cell), Math.ceil(cell));
+        }
+      }
+    }
+
+    function pooledFeatures(matrix) {
+      let top = 0;
+      let bottom = 0;
+      let left = 0;
+      let right = 0;
+      let total = 0;
+      const size = matrix.length;
+      matrix.forEach((row, y) => {
+        row.forEach((value, x) => {
+          total += value;
+          if (y < size / 2) top += value;
+          else bottom += value;
+          if (x < size / 2) left += value;
+          else right += value;
+        });
+      });
+      return {
+        top,
+        bottom,
+        left,
+        right,
+        total,
+        verticalBalance: Math.abs(left - right) / Math.max(1, total),
+        bottomRatio: bottom / Math.max(1, total),
+        topRatio: top / Math.max(1, total)
+      };
+    }
+
+    function renderCnn() {
+      if (!imagePreview.complete || !imagePreview.naturalWidth) return;
+      const matrix = imageMatrix(imagePreview);
+      const vertical = convolve(matrix, [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]]);
+      const horizontal = convolve(matrix, [[-1, -2, -1], [0, 0, 0], [1, 2, 1]]);
+      drawMatrix(sourceMap, matrix);
+      drawMatrix(verticalMap, vertical);
+      drawMatrix(horizontalMap, horizontal);
+    }
+
+    async function runCnnClassification() {
+      if (!mobileNetModel) {
+        cnnResult.textContent = "MobileNet 模型还在加载，请稍等。";
+        return;
+      }
+      if (!imagePreview.complete || !imagePreview.naturalWidth) {
+        cnnResult.textContent = "请先上传一张图片。";
+        return;
+      }
+
+      renderCnn();
+      cnnResult.textContent = "正在分类...";
+      const predictions = await mobileNetModel.classify(imagePreview, 5);
+      updateBars(cnnBars, predictions.map((item) => item.probability), predictions.map((item) => item.className));
+      cnnResult.textContent = `Top 1：${predictions[0].className}，置信度 ${Math.round(predictions[0].probability * 100)}%。`;
+    }
+
+    imageUpload.addEventListener("change", () => {
+      const file = imageUpload.files[0];
+      if (!file) return;
+      imagePreview.src = URL.createObjectURL(file);
+      cnnResult.textContent = "图片已加载，点击分类。";
+    });
+    imagePreview.addEventListener("load", renderCnn);
+    document.querySelector("#classifyImage").addEventListener("click", runCnnClassification);
+
+    async function loadModels() {
+      mlpResult.textContent = "正在加载 MNIST MLP 模型...";
+      cnnResult.textContent = "正在加载 MobileNet 模型...";
+      try {
+        mnistModel = await tf.loadLayersModel(mnistModelUrl);
+        mlpResult.textContent = "MNIST MLP 模型已加载。请写一个数字并点击预测。";
+      } catch (error) {
+        console.error("MNIST MLP 模型加载失败", error);
+        mlpResult.textContent = "模型加载失败，请检查网络或刷新页面。";
+      }
+
+      try {
+        mobileNetModel = await mobilenet.load({ version: 1, alpha: 0.25 });
+        cnnResult.textContent = "MobileNet 模型已加载。请上传图片后点击分类。";
+      } catch (error) {
+        console.error("MobileNet 模型加载失败", error);
+        cnnResult.textContent = "模型加载失败，请检查网络或刷新页面。";
+      }
+    }
+
+    setupDigitCanvas();
+    updateBars(digitBars, Array(10).fill(0), Array.from({ length: 10 }, (_, index) => String(index)));
+    updateBars(cnnBars, Array(5).fill(0), ["Top 1", "Top 2", "Top 3", "Top 4", "Top 5"]);
+    loadModels();
+  </script>
+</body>
+</html>

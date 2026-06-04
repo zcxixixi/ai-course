@@ -138,6 +138,36 @@ python demo.py
 我自己学习资料/demos/03-ml-regression-basic/task.md
 ```
 
+#### Demo 05：神经网络互动入门
+
+目标：用真实开源模型理解 MLP 手写数字识别和 CNN 图像分类。
+
+包含内容：
+
+- MLP 手写数字识别小游戏：加载公开 MNIST MLP，手写目标数字并观察输出概率。
+- CNN 图像分类：加载轻量版 TensorFlow.js MobileNet 0.25，上传图片并查看 Top 5 分类结果。
+
+说明：首次运行需要联网加载模型。
+
+直接打开：
+
+```text
+我自己学习资料/demos/05-neural-network-playground/index.html
+```
+
+也可以启动本地服务：
+
+```bash
+cd "我自己学习资料/demos"
+python3 -m http.server 8000
+```
+
+然后访问：
+
+```text
+http://localhost:8000/05-neural-network-playground/
+```
+
 ### 3. 了解大模型和 Agent 的区别
 
 请用自己的话回答下面问题：

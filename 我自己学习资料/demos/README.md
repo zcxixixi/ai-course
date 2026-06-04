@@ -117,3 +117,36 @@ python3 demo.py
 cd "04-reading-comprehension"
 python3 demo.py
 ```
+
+## 05：神经网络互动入门
+
+路径：
+
+```text
+05-neural-network-playground/
+```
+
+包含两个真实开源模型网页示例：
+
+- MLP 手写数字识别小游戏：公开 MNIST MLP
+- CNN 图像分类：轻量版 TensorFlow.js MobileNet 0.25
+
+说明：首次运行需要联网加载模型。
+
+直接双击打开：
+
+```text
+05-neural-network-playground/index.html
+```
+
+也可以在当前目录启动本地服务：
+
+```bash
+python3 -m http.server 8000
+```
+
+然后访问：
+
+```text
+http://localhost:8000/05-neural-network-playground/
+```
