@@ -4,6 +4,12 @@
 
 本仓库用于维护 8 次人工智能课程资料。
 
+## 最新 Demo
+
+- Demo 05：神经网络互动入门  
+  路径：`我自己学习资料/demos/05-neural-network-playground/index.html`  
+  内容：MLP 手写数字识别 + 轻量版 MobileNet CNN 图像分类。
+
 ## 课程录屏
 
 - B 站课程录屏：[研究生人工智能课程录屏](https://www.bilibili.com/video/BV1Nd596vE5e/?spm_id_from=333.1387.homepage.video_card.click&vd_source=996a8a0d9f9231a59e4eabcd3bffa671)
