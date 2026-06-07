@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -50,6 +51,7 @@ JSON 格式：
 
 AUTO_GRADE_MARKER = "<!-- ai-course-auto-grade -->"
 AUTO_GRADE_TITLE = "自动批改反馈："
+MODEL_ATTEMPTS = 3
 
 
 DISCUSSION_QUERY = """
@@ -200,14 +202,27 @@ def fetch_comments(owner: str, repo: str, number: int, token: str) -> tuple[str,
 
 
 def parse_grade(raw: str) -> dict[str, Any]:
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        start = raw.find("{")
-        end = raw.rfind("}")
-        if start >= 0 and end > start:
-            return json.loads(raw[start : end + 1])
-        raise
+    raw = raw.strip()
+    candidates = [raw]
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start >= 0 and end > start:
+        candidates.append(raw[start : end + 1])
+
+    last_error: json.JSONDecodeError | None = None
+    for candidate in candidates:
+        try:
+            result = json.loads(candidate, strict=False)
+        except json.JSONDecodeError as error:
+            last_error = error
+            continue
+        if not isinstance(result, dict):
+            raise ValueError("模型返回的 JSON 不是对象")
+        return result
+
+    if last_error is not None:
+        raise last_error
+    raise ValueError("模型未返回 JSON")
 
 
 def grade_comment(
@@ -217,29 +232,44 @@ def grade_comment(
     discussion_body: str,
     comment: DiscussionComment,
 ) -> dict[str, Any]:
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            temperature=0.2,
-            messages=[
-                {"role": "system", "content": DEFAULT_RUBRIC},
-                {
-                    "role": "user",
-                    "content": (
-                        f"Discussion 标题：{discussion_title}\n"
-                        f"Discussion 正文：\n{discussion_body}\n\n"
-                        f"学生 GitHub 用户名：{comment.author}\n"
-                        f"评论链接：{comment.url}\n\n"
-                        f"学生回答：\n{comment.body}"
-                    ),
-                },
-            ],
-        )
-    except OpenAIError as error:
-        fail(f"模型接口调用失败：{error}")
+    messages = [
+        {"role": "system", "content": DEFAULT_RUBRIC},
+        {
+            "role": "user",
+            "content": (
+                f"Discussion 标题：{discussion_title}\n"
+                f"Discussion 正文：\n{discussion_body}\n\n"
+                f"学生 GitHub 用户名：{comment.author}\n"
+                f"评论链接：{comment.url}\n\n"
+                f"学生回答：\n{comment.body}"
+            ),
+        },
+    ]
 
-    raw = response.choices[0].message.content or "{}"
-    result = parse_grade(raw)
+    last_error: Exception | None = None
+    for attempt in range(1, MODEL_ATTEMPTS + 1):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                temperature=0.2,
+                messages=messages,
+            )
+            result = parse_grade(response.choices[0].message.content or "")
+            break
+        except (OpenAIError, json.JSONDecodeError, ValueError) as error:
+            last_error = error
+            if attempt == MODEL_ATTEMPTS:
+                raise RuntimeError(f"模型批改失败（已尝试 {MODEL_ATTEMPTS} 次）：{error}") from error
+            wait_seconds = 2 ** (attempt - 1)
+            print(
+                f"  模型调用异常，第 {attempt}/{MODEL_ATTEMPTS} 次：{error}；"
+                f"{wait_seconds} 秒后重试",
+                file=sys.stderr,
+            )
+            time.sleep(wait_seconds)
+    else:
+        raise RuntimeError(f"模型批改失败：{last_error}")
+
     result["author"] = comment.author
     result["comment_id"] = comment.comment_id
     result["comment_url"] = comment.url
@@ -337,6 +367,20 @@ def write_outputs(results: list[dict[str, Any]], output_dir: Path, discussion_nu
     return csv_path, jsonl_path
 
 
+def select_comments(
+    comments: list[DiscussionComment],
+    post_replies: bool,
+    force_post: bool,
+    limit: int,
+) -> list[DiscussionComment]:
+    selected = [comment for comment in comments if comment.body.strip()]
+    if post_replies and not force_post:
+        selected = [comment for comment in selected if not comment.has_grade_reply]
+    if limit > 0:
+        selected = selected[:limit]
+    return selected
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Grade GitHub Discussion comments with an LLM.")
     parser.add_argument("--owner", default=os.getenv("REPO_OWNER", "zcxixixi"))
@@ -392,39 +436,58 @@ def main() -> None:
     if not os.getenv("OPENAI_API_KEY"):
         fail("缺少 OPENAI_API_KEY。请放进 .env 或当前 shell 环境变量。")
 
-    client = OpenAI(base_url=args.base_url, timeout=60)
+    # grade_comment owns retries so malformed responses and connection errors
+    # follow the same bounded retry policy.
+    client = OpenAI(base_url=args.base_url, timeout=45, max_retries=0)
 
     if args.self_test:
         run_self_test(client, args.model)
         return
 
-    discussion_id, title, discussion_body, comments = fetch_comments(args.owner, args.repo, args.discussion, github_token)
-    comments = [comment for comment in comments if comment.body.strip()]
-    if args.limit > 0:
-        comments = comments[: args.limit]
+    discussion_id, title, discussion_body, all_comments = fetch_comments(
+        args.owner,
+        args.repo,
+        args.discussion,
+        github_token,
+    )
+    total_comments = len([comment for comment in all_comments if comment.body.strip()])
+    comments = select_comments(all_comments, args.post_replies, args.force_post, args.limit)
 
     print(f"Discussion: {title}")
+    print(f"有效评论数: {total_comments}")
     print(f"待批改评论数: {len(comments)}")
 
     results: list[dict[str, Any]] = []
+    failures: list[str] = []
     for index, comment in enumerate(comments, start=1):
         print(f"[{index}/{len(comments)}] 批改 {comment.author} ...")
-        result = grade_comment(client, args.model, title, discussion_body, comment)
+        try:
+            result = grade_comment(client, args.model, title, discussion_body, comment)
+        except RuntimeError as error:
+            failures.append(f"{comment.author}: {error}")
+            print(f"  跳过：{error}", file=sys.stderr)
+            continue
 
         if args.post_replies:
-            if comment.has_grade_reply and not args.force_post:
-                result["reply_skipped_reason"] = "already_posted"
-                print(f"  跳过回帖：{comment.author} 已有自动批改回复")
-            else:
+            try:
                 reply_url = post_reply(github_token, discussion_id, comment.comment_id, format_reply(result))
                 result["reply_posted_url"] = reply_url
                 print(f"  已回帖：{reply_url}")
+            except (requests.RequestException, KeyError, SystemExit) as error:
+                failures.append(f"{comment.author}: GitHub 回帖失败：{error}")
+                result["reply_skipped_reason"] = "post_failed"
+                print(f"  回帖失败：{error}", file=sys.stderr)
 
         results.append(result)
 
     csv_path, jsonl_path = write_outputs(results, Path(args.output_dir), args.discussion)
     print(f"完成：{csv_path}")
     print(f"完成：{jsonl_path}")
+    if failures:
+        print(f"失败数: {len(failures)}", file=sys.stderr)
+        for failure in failures:
+            print(f"- {failure}", file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
