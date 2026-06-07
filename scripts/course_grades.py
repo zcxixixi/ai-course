@@ -18,7 +18,7 @@ from typing import Any, Iterable
 import requests
 from dotenv import load_dotenv
 from openpyxl import Workbook, load_workbook
-from openpyxl.formatting.rule import CellIsRule
+from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
@@ -27,13 +27,13 @@ DISCUSSION_NUMBERS = (17, 20, 22)
 STUDENT_ID_PATTERN = re.compile(r"^(25\d{2})-(\d{2})$")
 CLASS_HEADING_PATTERN = re.compile(r"^(25\d{2})班名单$")
 DISCUSSION_SCORE_PATTERN = re.compile(r"分数[：:]\s*(\d+(?:\.\d+)?)\s*/\s*100")
-PROJECT_SCORE_PATTERN = re.compile(r"分数[：:]\s*(\d+(?:\.\d+)?)\s*/\s*30")
+PROJECT_SCORE_PATTERN = re.compile(r"分数[：:]\s*(\d+(?:\.\d+)?)\s*/\s*100")
 PROJECT_GRADE_MARKER = "course-project-grade"
 
-BASE_REGULAR_SCORE = 30.0
-GITHUB_REGISTRATION_SCORE = 10.0
-DISCUSSION_MAX_SCORE = 30.0
-PROJECT_MAX_SCORE = 30.0
+ATTENDANCE_MAX_SCORE = 10.0
+PRACTICE_ONE_MAX_SCORE = 20.0
+PRACTICE_TWO_MAX_SCORE = 20.0
+PROJECT_MAX_SCORE = 50.0
 
 
 @dataclass(frozen=True)
@@ -64,6 +64,7 @@ class RegistrationResult:
 @dataclass
 class ProjectResult:
     scores: dict[str, float] = field(default_factory=dict)
+    groups: dict[str, str] = field(default_factory=dict)
     rows: list[dict[str, Any]] = field(default_factory=list)
     reviews: list[ReviewItem] = field(default_factory=list)
 
@@ -295,7 +296,7 @@ def latest_project_score(comments: list[dict[str, Any]]) -> tuple[float | None, 
         if not match:
             continue
         score = float(match.group(1))
-        if 0 <= score <= PROJECT_MAX_SCORE:
+        if 0 <= score <= 100:
             found.append((comment.get("created_at") or "", score, comment.get("html_url") or ""))
     if not found:
         return None, ""
@@ -310,75 +311,108 @@ def build_projects(
     valid_student_ids: set[str],
 ) -> ProjectResult:
     result = ProjectResult()
-    candidates: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    assigned_students: dict[str, str] = {}
+    score_candidates: dict[str, list[tuple[str, float]]] = defaultdict(list)
 
     for issue in issues:
         if not is_project_issue(issue):
             continue
         body = issue.get("body") or ""
-        student_id = normalize_student_id(extract_section(body, "唯一编号"))
-        project_url = extract_section(body, "项目链接").splitlines()[0].strip()
+        project_group = extract_section(body, "项目组")
+        member_text = extract_section(body, "成员唯一编号")
+        member_ids = [
+            student_id
+            for line in member_text.splitlines()
+            if (student_id := normalize_student_id(line.strip()))
+        ]
+        project_url = extract_section(body, "成果链接").splitlines()[0].strip()
         github_user = ((issue.get("user") or {}).get("login") or "").lower()
         issue_url = issue.get("html_url") or ""
         row = {
-            "student_id": student_id,
+            "project_group": project_group,
+            "member_ids": "、".join(member_ids),
+            "member_count": len(member_ids),
             "github_user": github_user,
             "project_url": project_url,
             "issue_url": issue_url,
+            "status": "",
             "score": "",
             "grade_url": "",
-            "status": "",
         }
-        if student_id not in valid_student_ids:
-            row["status"] = "invalid_student_id"
+        invalid_ids = [student_id for student_id in member_ids if student_id not in valid_student_ids]
+        if not project_group:
+            row["status"] = "missing_group"
             result.reviews.append(
-                ReviewItem("项目提交", student_id, github_user, issue_url, "编号无效或不在名单中")
+                ReviewItem("项目材料", github_user=github_user, source_url=issue_url, message="未填写项目组")
             )
-        elif registrations.by_student.get(student_id) != github_user:
-            row["status"] = "registration_mismatch"
+        elif not member_ids:
+            row["status"] = "missing_members"
             result.reviews.append(
-                ReviewItem("项目提交", student_id, github_user, issue_url, "提交账号与有效登记不一致")
+                ReviewItem("项目材料", github_user=github_user, source_url=issue_url, message="未找到有效成员编号")
+            )
+        elif invalid_ids:
+            row["status"] = "invalid_members"
+            result.reviews.append(
+                ReviewItem(
+                    "项目材料",
+                    github_user=github_user,
+                    source_url=issue_url,
+                    message=f"成员编号不在名单中：{'、'.join(invalid_ids)}",
+                )
             )
         else:
             comments = client.issue_comments(int(issue["number"]))
             score, grade_url = latest_project_score(comments)
             row["score"] = score if score is not None else ""
             row["grade_url"] = grade_url
+            row["status"] = "graded" if score is not None else "pending_grade"
             if score is None:
-                row["status"] = "pending_review"
                 result.reviews.append(
-                    ReviewItem("项目待复核", student_id, github_user, issue_url, "尚无有效项目评分")
+                    ReviewItem(
+                        "项目AI评分",
+                        github_user=github_user,
+                        source_url=issue_url,
+                        message=f"项目组 {project_group} 尚无有效AI评分",
+                    )
                 )
-            else:
-                row["status"] = "graded"
-                row["_created_at"] = issue.get("created_at") or ""
-                candidates[student_id].append(row)
+            if not 10 <= len(member_ids) <= 15:
+                result.reviews.append(
+                    ReviewItem(
+                        "项目材料",
+                        github_user=github_user,
+                        source_url=issue_url,
+                        message=f"项目组 {project_group} 共{len(member_ids)}人，不在建议的10-15人范围",
+                    )
+                )
+            for student_id in member_ids:
+                previous_group = assigned_students.get(student_id)
+                if previous_group and previous_group != project_group:
+                    result.reviews.append(
+                        ReviewItem(
+                            "项目材料",
+                            student_id,
+                            github_user,
+                            issue_url,
+                            f"成员同时出现在项目组 {previous_group} 和 {project_group}",
+                        )
+                    )
+                assigned_students[student_id] = project_group
+                result.groups[student_id] = project_group
+                if score is not None:
+                    score_candidates[student_id].append(
+                        (issue.get("updated_at") or issue.get("created_at") or "", score)
+                    )
         result.rows.append(row)
-
-    for student_id, rows in candidates.items():
-        latest = max(rows, key=lambda row: row.get("_created_at", ""))
-        result.scores[student_id] = float(latest["score"])
-        result.reviews.append(
-            ReviewItem(
-                "项目评分复核",
-                student_id,
-                latest["github_user"],
-                latest["grade_url"] or latest["issue_url"],
-                f"AI建议分 {latest['score']}/30，请教师确认或在覆盖表修改",
-            )
-        )
-        if len(rows) > 1:
+    for student_id, candidates in score_candidates.items():
+        result.scores[student_id] = max(candidates, key=lambda item: item[0])[1]
+        if len(candidates) > 1:
             result.reviews.append(
                 ReviewItem(
                     "项目重复提交",
                     student_id,
-                    latest["github_user"],
-                    latest["issue_url"],
-                    "检测到多次已评分提交，汇总采用最新提交",
+                    message="检测到多个已评分项目，正式成绩采用最新提交",
                 )
             )
-    for row in result.rows:
-        row.pop("_created_at", None)
     return result
 
 
@@ -497,51 +531,100 @@ def build_discussions(
 def create_override_template(path: Path, students: list[Student]) -> None:
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "人工覆盖"
-    sheet.append(["唯一编号", "项目成绩覆盖", "Discussion百分制覆盖", "备注"])
+    sheet.title = "成绩录入"
+    sheet.append(
+        [
+            "唯一编号",
+            "项目组",
+            "考勤/10",
+            "实践1/20",
+            "实践2/20",
+            "项目成绩覆盖/50",
+            "备注",
+        ]
+    )
     for student in students:
-        sheet.append([student.student_id, "", "", ""])
-    style_sheet(sheet, freeze="A2", widths={1: 14, 2: 16, 3: 24, 4: 36})
+        sheet.append([student.student_id, "", "", "", "", "", ""])
+    style_sheet(
+        sheet,
+        freeze="A2",
+        widths={1: 14, 2: 14, 3: 12, 4: 14, 5: 14, 6: 20, 7: 36},
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     workbook.save(path)
 
 
-def read_overrides(path: Path, valid_student_ids: set[str]) -> tuple[dict[str, dict[str, Any]], list[ReviewItem]]:
+def read_score_inputs(
+    path: Path,
+    valid_student_ids: set[str],
+) -> tuple[dict[str, dict[str, Any]], list[ReviewItem]]:
     if not path.exists():
         return {}, []
     workbook = load_workbook(path, read_only=True, data_only=True)
-    sheet = workbook["人工覆盖"] if "人工覆盖" in workbook.sheetnames else workbook.active
+    sheet = workbook["成绩录入"] if "成绩录入" in workbook.sheetnames else workbook.active
     rows = sheet.iter_rows(values_only=True)
     headers = [str(value or "").strip() for value in next(rows)]
     indexes = {header: index for index, header in enumerate(headers)}
-    required = {"唯一编号", "项目成绩覆盖", "Discussion百分制覆盖", "备注"}
+    required = {
+        "唯一编号",
+        "项目组",
+        "考勤/10",
+        "实践1/20",
+        "实践2/20",
+        "项目成绩覆盖/50",
+        "备注",
+    }
     if not required.issubset(indexes):
-        raise ValueError("人工覆盖表缺少必要列")
+        raise ValueError("成绩录入表格式已更新，请备份旧表后使用 --init-overrides 重新生成")
 
-    overrides: dict[str, dict[str, Any]] = {}
+    score_inputs: dict[str, dict[str, Any]] = {}
     reviews: list[ReviewItem] = []
+
+    def parse_score(
+        row: tuple[Any, ...],
+        header: str,
+        maximum: float,
+        student_id: str,
+    ) -> float | None:
+        value = row[indexes[header]]
+        if value in (None, ""):
+            return None
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            reviews.append(ReviewItem("成绩录入", student_id, message=f"{header}不是数字"))
+            return None
+        if not 0 <= score <= maximum:
+            reviews.append(
+                ReviewItem("成绩录入", student_id, message=f"{header}超出0-{maximum:g}")
+            )
+            return None
+        return score
+
     for row in rows:
         student_id = normalize_student_id(row[indexes["唯一编号"]])
         if not student_id:
             continue
         if student_id not in valid_student_ids:
-            reviews.append(ReviewItem("人工覆盖", student_id, message="编号不在名单中"))
+            reviews.append(ReviewItem("成绩录入", student_id, message="编号不在名单中"))
             continue
-        project = row[indexes["项目成绩覆盖"]]
-        discussion = row[indexes["Discussion百分制覆盖"]]
-        note = str(row[indexes["备注"]] or "").strip()
-        if project not in (None, "") and not 0 <= float(project) <= PROJECT_MAX_SCORE:
-            reviews.append(ReviewItem("人工覆盖", student_id, message="项目覆盖分超出0-30"))
-            continue
-        if discussion not in (None, "") and not 0 <= float(discussion) <= 100:
-            reviews.append(ReviewItem("人工覆盖", student_id, message="Discussion覆盖分超出0-100"))
-            continue
-        overrides[student_id] = {
-            "project": None if project in (None, "") else float(project),
-            "discussion": None if discussion in (None, "") else float(discussion),
-            "note": note,
+        score_inputs[student_id] = {
+            "project_group": str(row[indexes["项目组"]] or "").strip(),
+            "attendance": parse_score(
+                row, "考勤/10", ATTENDANCE_MAX_SCORE, student_id
+            ),
+            "practice_one": parse_score(
+                row, "实践1/20", PRACTICE_ONE_MAX_SCORE, student_id
+            ),
+            "practice_two": parse_score(
+                row, "实践2/20", PRACTICE_TWO_MAX_SCORE, student_id
+            ),
+            "project_override": parse_score(
+                row, "项目成绩覆盖/50", PROJECT_MAX_SCORE, student_id
+            ),
+            "note": str(row[indexes["备注"]] or "").strip(),
         }
-    return overrides, reviews
+    return score_inputs, reviews
 
 
 def calculate_grade(
@@ -549,32 +632,43 @@ def calculate_grade(
     registrations: RegistrationResult,
     projects: ProjectResult,
     discussions: DiscussionResult,
-    overrides: dict[str, dict[str, Any]],
+    score_inputs: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    override = overrides.get(student.student_id, {})
+    inputs = score_inputs.get(student.student_id, {})
+    attendance = inputs.get("attendance")
+    practice_one = inputs.get("practice_one")
+    practice_two = inputs.get("practice_two")
     project_auto = projects.scores.get(student.student_id)
+    project_override = inputs.get("project_override")
     project_score = (
-        override.get("project")
-        if override.get("project") is not None
-        else (project_auto if project_auto is not None else 0.0)
+        project_override
+        if project_override is not None
+        else (
+            project_auto * PROJECT_MAX_SCORE / 100
+            if project_auto is not None
+            else None
+        )
     )
 
+    components = [attendance, practice_one, practice_two, project_score]
+    missing_items = [
+        label
+        for label, value in zip(
+            ("考勤", "实践1", "实践2", "项目"),
+            components,
+        )
+        if value is None
+    ]
+    total = None if missing_items else sum(float(value) for value in components)
+    if total is not None and not 0 <= total <= 100:
+        raise ValueError(f"{student.student_id} 总分超出范围：{total}")
+
+    github_user = registrations.by_student.get(student.student_id, "")
     discussion_items = [
         discussions.scores.get(student.student_id, {}).get(number, 0.0)
         for number in DISCUSSION_NUMBERS
     ]
     discussion_average = sum(discussion_items) / len(DISCUSSION_NUMBERS)
-    if override.get("discussion") is not None:
-        discussion_average = override["discussion"]
-    discussion_score = discussion_average * DISCUSSION_MAX_SCORE / 100
-
-    github_user = registrations.by_student.get(student.student_id, "")
-    regular_score = BASE_REGULAR_SCORE + (
-        GITHUB_REGISTRATION_SCORE if github_user else 0.0
-    )
-    total = project_score + discussion_score + regular_score
-    if not 0 <= total <= 100:
-        raise ValueError(f"{student.student_id} 总分超出范围：{total}")
 
     return {
         "student_id": student.student_id,
@@ -582,28 +676,21 @@ def calculate_grade(
         "sequence": student.sequence,
         "name": student.name,
         "github_user": github_user,
-        "project_score": round(project_score, 2),
+        "project_group": inputs.get("project_group") or projects.groups.get(student.student_id, ""),
+        "attendance_score": attendance,
+        "practice_one_score": practice_one,
+        "practice_two_score": practice_two,
+        "project_ai_score": project_auto,
         "project_source": (
             "manual"
-            if override.get("project") is not None
-            else ("auto" if project_auto is not None else "missing")
+            if project_override is not None
+            else ("ai" if project_auto is not None else "missing")
         ),
+        "project_score": None if project_score is None else round(project_score, 2),
         "discussion_average": round(discussion_average, 2),
-        "discussion_score": round(discussion_score, 2),
-        "discussion_source": (
-            "manual"
-            if override.get("discussion") is not None
-            else (
-                "auto"
-                if discussions.scores.get(student.student_id)
-                else "missing"
-            )
-        ),
-        "regular_base": BASE_REGULAR_SCORE,
-        "github_bonus": GITHUB_REGISTRATION_SCORE if github_user else 0.0,
-        "regular_score": regular_score,
-        "total_score": round(total, 2),
-        "note": override.get("note", ""),
+        "total_score": None if total is None else round(total, 2),
+        "grade_status": "完成" if total is not None else f"待录入：{'、'.join(missing_items)}",
+        "note": inputs.get("note", ""),
         **{f"discussion_{number}": discussion_items[index] for index, number in enumerate(DISCUSSION_NUMBERS)},
     }
 
@@ -654,40 +741,50 @@ def write_master_workbook(
         ("class_id", "班级"),
         ("sequence", "序号"),
         ("name", "姓名"),
-        ("github_user", "GitHub用户名"),
-        ("project_score", "项目成绩/30"),
-        ("discussion_score", "Discussion成绩/30"),
-        ("regular_score", "平时成绩/40"),
+        ("project_group", "项目组"),
+        ("attendance_score", "考勤/10"),
+        ("practice_one_score", "实践1/20"),
+        ("practice_two_score", "实践2/20"),
+        ("project_score", "项目成绩/50"),
         ("total_score", "总成绩/100"),
-        ("project_source", "项目来源"),
-        ("discussion_source", "Discussion来源"),
+        ("grade_status", "状态"),
         ("note", "备注"),
     ]
     append_dict_rows(summary, summary_headers, grade_rows)
     style_sheet(
         summary,
-        widths={1: 14, 2: 10, 3: 8, 4: 12, 5: 20, 6: 14, 7: 18, 8: 14, 9: 14, 10: 12, 11: 16, 12: 30},
+        widths={1: 14, 2: 10, 3: 8, 4: 12, 5: 14, 6: 12, 7: 14, 8: 14, 9: 16, 10: 14, 11: 28, 12: 30},
     )
     summary.conditional_formatting.add(
-        f"I2:I{summary.max_row}",
-        CellIsRule(operator="lessThan", formula=["60"], fill=WARNING_FILL),
+        f"J2:J{summary.max_row}",
+        FormulaRule(formula=["AND(ISNUMBER(J2),J2<60)"], fill=WARNING_FILL),
     )
 
     detail = workbook.create_sheet("成绩明细")
     detail_headers = [
         ("student_id", "唯一编号"),
         ("name", "姓名"),
-        ("project_score", "项目/30"),
-        *[(f"discussion_{number}", f"Discussion #{number}/100") for number in DISCUSSION_NUMBERS],
-        ("discussion_average", "Discussion平均/100"),
-        ("discussion_score", "Discussion折算/30"),
-        ("regular_base", "平时基础/30"),
-        ("github_bonus", "GitHub登记/10"),
-        ("regular_score", "平时合计/40"),
+        ("project_group", "项目组"),
+        ("attendance_score", "考勤/10"),
+        ("practice_one_score", "实践1/20"),
+        ("practice_two_score", "实践2/20"),
+        ("project_ai_score", "项目AI评分/100"),
+        ("project_score", "项目折算/50"),
+        ("project_source", "项目来源"),
         ("total_score", "总成绩/100"),
+        ("grade_status", "状态"),
+        ("github_user", "GitHub用户名（活动）"),
+        *[(f"discussion_{number}", f"Discussion #{number}/100") for number in DISCUSSION_NUMBERS],
+        ("discussion_average", "Discussion平均/100（活动）"),
     ]
     append_dict_rows(detail, detail_headers, grade_rows)
-    style_sheet(detail, widths={1: 14, 2: 12, 3: 12, 4: 18, 5: 18, 6: 18, 7: 20, 8: 18, 9: 16, 10: 16, 11: 16, 12: 16})
+    style_sheet(
+        detail,
+        widths={
+            1: 14, 2: 12, 3: 14, 4: 12, 5: 14, 6: 14, 7: 22, 8: 22,
+            9: 16, 10: 14, 11: 14, 12: 28, 13: 22, 14: 18, 15: 18, 16: 18,
+        },
+    )
 
     registration_sheet = workbook.create_sheet("账号登记")
     append_dict_rows(
@@ -706,17 +803,19 @@ def write_master_workbook(
     append_dict_rows(
         project_sheet,
         [
-            ("student_id", "唯一编号"),
-            ("github_user", "GitHub用户名"),
-            ("score", "项目分/30"),
+            ("project_group", "项目组"),
+            ("member_ids", "成员唯一编号"),
+            ("member_count", "人数"),
+            ("github_user", "登记账号"),
+            ("score", "AI评分/100"),
             ("status", "状态"),
-            ("project_url", "项目链接"),
-            ("issue_url", "提交Issue"),
-            ("grade_url", "评分回复"),
+            ("project_url", "成果链接"),
+            ("issue_url", "材料登记Issue"),
+            ("grade_url", "AI评分回复"),
         ],
         projects.rows,
     )
-    style_sheet(project_sheet, widths={1: 14, 2: 22, 3: 12, 4: 20, 5: 55, 6: 55, 7: 55})
+    style_sheet(project_sheet, widths={1: 16, 2: 55, 3: 10, 4: 22, 5: 14, 6: 20, 7: 55, 8: 55, 9: 55})
 
     discussion_sheet = workbook.create_sheet("Discussion明细")
     append_dict_rows(
@@ -762,12 +861,26 @@ def write_master_workbook(
     stats.append(["指标", "数值"])
     stats.append(["学生总数", len(grade_rows)])
     stats.append(["已登记GitHub账号", sum(bool(row["github_user"]) for row in grade_rows)])
-    stats.append(["已有项目成绩", sum(row["project_score"] > 0 for row in grade_rows)])
+    stats.append(["正式成绩已完成", sum(row["total_score"] is not None for row in grade_rows)])
+    stats.append(["考勤已录入", sum(row["attendance_score"] is not None for row in grade_rows)])
+    stats.append(["实践1已录入", sum(row["practice_one_score"] is not None for row in grade_rows)])
+    stats.append(["实践2已录入", sum(row["practice_two_score"] is not None for row in grade_rows)])
+    stats.append(["项目成绩已录入", sum(row["project_score"] is not None for row in grade_rows)])
     stats.append(["Discussion三次全交", sum(all(row[f"discussion_{number}"] > 0 for number in DISCUSSION_NUMBERS) for row in grade_rows)])
     stats.append(["待人工复核项", len(reviews)])
-    stats.append(["平均总成绩", round(sum(row["total_score"] for row in grade_rows) / len(grade_rows), 2)])
-    stats.append(["最高总成绩", max(row["total_score"] for row in grade_rows)])
-    stats.append(["最低总成绩", min(row["total_score"] for row in grade_rows)])
+    completed_totals = [
+        row["total_score"] for row in grade_rows if row["total_score"] is not None
+    ]
+    stats.append(
+        [
+            "平均总成绩",
+            round(sum(completed_totals) / len(completed_totals), 2)
+            if completed_totals
+            else "",
+        ]
+    )
+    stats.append(["最高总成绩", max(completed_totals) if completed_totals else ""])
+    stats.append(["最低总成绩", min(completed_totals) if completed_totals else ""])
     style_sheet(stats, widths={1: 28, 2: 16})
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -782,10 +895,12 @@ def write_personal_workbooks(output_dir: Path, grade_rows: list[dict[str, Any]])
         sheet.title = "个人成绩单"
         sheet.append(["课程成绩单", ""])
         sheet.append(["唯一编号", row["student_id"]])
-        sheet.append(["项目成绩", f"{row['project_score']}/30"])
-        sheet.append(["Discussion成绩", f"{row['discussion_score']}/30"])
-        sheet.append(["平时成绩", f"{row['regular_score']}/40"])
-        sheet.append(["总成绩", f"{row['total_score']}/100"])
+        sheet.append(["考勤", format_score(row["attendance_score"], 10)])
+        sheet.append(["实践1：CNN识别手写数字", format_score(row["practice_one_score"], 20)])
+        sheet.append(["实践2：计算机视觉应用", format_score(row["practice_two_score"], 20)])
+        sheet.append(["综合项目", format_score(row["project_score"], 50)])
+        sheet.append(["总成绩", format_score(row["total_score"], 100)])
+        sheet.append(["状态", row["grade_status"]])
         sheet.append(["生成时间", datetime.now().strftime("%Y-%m-%d %H:%M")])
         sheet.column_dimensions["A"].width = 22
         sheet.column_dimensions["B"].width = 28
@@ -799,8 +914,14 @@ def write_personal_workbooks(output_dir: Path, grade_rows: list[dict[str, Any]])
         workbook.save(output_dir / f"{row['student_id']}.xlsx")
 
 
+def format_score(score: float | None, maximum: int) -> str:
+    return "待录入" if score is None else f"{score:g}/{maximum}"
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="汇总课程项目、Discussion和平时成绩。")
+    parser = argparse.ArgumentParser(
+        description="汇总考勤、两次实践和综合项目正式成绩，并保留GitHub活动记录。"
+    )
     parser.add_argument("--roster", default="25级研究生名单.xlsx")
     parser.add_argument("--overrides", default="成绩人工覆盖.xlsx")
     parser.add_argument("--output-dir", default="local_grades")
@@ -839,19 +960,19 @@ def main() -> None:
         registrations = build_registrations(issues, valid_student_ids)
         projects = build_projects(client, issues, registrations, valid_student_ids)
         discussions = build_discussions(client, registrations)
-        overrides, override_reviews = read_overrides(override_path, valid_student_ids)
+        score_inputs, input_reviews = read_score_inputs(override_path, valid_student_ids)
     except (requests.RequestException, RuntimeError, ValueError, OSError) as error:
         fail(str(error))
 
     grade_rows = [
-        calculate_grade(student, registrations, projects, discussions, overrides)
+        calculate_grade(student, registrations, projects, discussions, score_inputs)
         for student in students
     ]
     reviews = [
         *registrations.reviews,
         *projects.reviews,
         *discussions.reviews,
-        *override_reviews,
+        *input_reviews,
     ]
     output_dir = Path(args.output_dir)
     master_path = output_dir / "课程成绩汇总.xlsx"

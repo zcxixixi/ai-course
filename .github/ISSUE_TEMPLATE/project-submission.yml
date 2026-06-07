@@ -1,5 +1,5 @@
-name: 课程项目提交
-description: 提交个人课程项目
+name: 综合项目材料登记
+description: 登记项目组和成果材料
 title: "[项目提交] "
 labels:
   - project-submission
@@ -7,20 +7,30 @@ body:
   - type: markdown
     attributes:
       value: |
-        请提交可访问的个人项目链接。不要填写姓名、学号、手机号或其他个人敏感信息。
+        请由项目组统一登记成果材料。不要填写姓名、学号、手机号或其他个人敏感信息。
   - type: input
-    id: student_id
+    id: project_group
     attributes:
-      label: 唯一编号
-      description: 格式为“班级-两位序号”，例如 2501-01。
-      placeholder: "2501-01"
+      label: 项目组
+      description: 填写项目组名称或编号。
+      placeholder: "第1组"
+    validations:
+      required: true
+  - type: textarea
+    id: member_ids
+    attributes:
+      label: 成员唯一编号
+      description: 每行填写一个“班级-两位序号”，例如 2501-01。每组约10-15人。
+      placeholder: |
+        2501-01
+        2501-02
     validations:
       required: true
   - type: input
     id: project_url
     attributes:
-      label: 项目链接
-      description: GitHub 仓库、在线演示或其他可公开访问的项目地址。
+      label: 成果链接
+      description: GitHub仓库、视频、在线演示或其他可访问的成果地址。
       placeholder: "https://github.com/..."
     validations:
       required: true
@@ -28,13 +38,13 @@ body:
     id: description
     attributes:
       label: 项目说明
-      description: 简要说明项目目标、主要功能、使用的 AI 技术和运行方式。
+      description: 简要说明项目目标、技术选择、成员分工和成果。
     validations:
       required: true
   - type: textarea
     id: evidence
     attributes:
-      label: 运行结果
-      description: 提供截图、演示链接、关键输出或其他完成证据。
+      label: 报告与答辩材料
+      description: 上传或提供2000字以上Word报告、答辩PPT及其他成果材料。
     validations:
       required: true

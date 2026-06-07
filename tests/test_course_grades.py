@@ -60,43 +60,93 @@ class CourseGradesTests(unittest.TestCase):
         self.assertEqual(result.by_student["2501-02"], "carol")
         self.assertTrue(any(item.category == "账号冲突" for item in result.reviews))
 
-    def test_calculate_grade_counts_missing_discussion_as_zero(self):
+    def test_group_project_score_maps_to_all_members(self):
+        members = [f"2501-{number:02d}" for number in range(1, 11)]
+        project_issue = {
+            "number": 10,
+            "title": "[项目提交] 第1组",
+            "body": (
+                "### 项目组\n\n第1组\n\n"
+                "### 成员唯一编号\n\n"
+                + "\n".join(members)
+                + "\n\n### 成果链接\n\nhttps://example.test/project\n"
+            ),
+            "html_url": "https://example.test/issues/10",
+            "created_at": "2026-06-01T00:00:00Z",
+            "updated_at": "2026-06-02T00:00:00Z",
+            "user": {"login": "leader"},
+            "labels": [{"name": "project-submission"}],
+        }
+
+        class Client:
+            def issue_comments(self, number):
+                return [
+                    {
+                        "body": "<!-- course-project-grade:abc -->\n分数：92/100",
+                        "created_at": "2026-06-02T01:00:00Z",
+                        "html_url": "https://example.test/grade",
+                    }
+                ]
+
+        result = GRADES.build_projects(
+            Client(),
+            [project_issue],
+            GRADES.RegistrationResult(),
+            set(members),
+        )
+
+        self.assertEqual(result.scores, {member: 92 for member in members})
+        self.assertEqual(result.groups, {member: "第1组" for member in members})
+        self.assertEqual(result.rows[0]["status"], "graded")
+
+    def test_ai_project_score_is_scaled_to_fifty_points(self):
         student = GRADES.Student("2501-01", "2501", 1, "甲")
         registrations = GRADES.RegistrationResult(
             by_student={"2501-01": "alice"},
             by_user={"alice": "2501-01"},
         )
-        projects = GRADES.ProjectResult(scores={"2501-01": 27})
+        projects = GRADES.ProjectResult(scores={"2501-01": 90})
         discussions = GRADES.DiscussionResult(
             scores={"2501-01": {17: 90, 20: 80}}
         )
+        score_inputs = {
+            "2501-01": {
+                "attendance": 10,
+                "practice_one": 20,
+                "practice_two": 20,
+                "project_override": None,
+                "project_group": "第1组",
+                "note": "",
+            }
+        }
 
         row = GRADES.calculate_grade(
             student,
             registrations,
             projects,
             discussions,
-            {},
+            score_inputs,
         )
 
         self.assertEqual(row["discussion_average"], 56.67)
-        self.assertEqual(row["discussion_score"], 17)
-        self.assertEqual(row["regular_score"], 40)
-        self.assertEqual(row["total_score"], 84)
-        self.assertEqual(row["project_source"], "auto")
-        self.assertEqual(row["discussion_source"], "auto")
+        self.assertEqual(row["project_score"], 45)
+        self.assertEqual(row["total_score"], 95)
+        self.assertEqual(row["project_source"], "ai")
 
-    def test_manual_overrides_take_precedence(self):
+    def test_manual_project_override_takes_precedence(self):
         student = GRADES.Student("2501-01", "2501", 1, "甲")
         registrations = GRADES.RegistrationResult()
-        projects = GRADES.ProjectResult(scores={"2501-01": 24})
+        projects = GRADES.ProjectResult(scores={"2501-01": 70})
         discussions = GRADES.DiscussionResult(
             scores={"2501-01": {17: 100, 20: 100, 22: 100}}
         )
-        overrides = {
+        score_inputs = {
             "2501-01": {
-                "project": 29,
-                "discussion": 80,
+                "attendance": 8,
+                "practice_one": 18,
+                "practice_two": 19,
+                "project_override": 49,
+                "project_group": "第1组",
                 "note": "人工复核",
             }
         }
@@ -106,15 +156,12 @@ class CourseGradesTests(unittest.TestCase):
             registrations,
             projects,
             discussions,
-            overrides,
+            score_inputs,
         )
 
-        self.assertEqual(row["project_score"], 29)
-        self.assertEqual(row["discussion_score"], 24)
-        self.assertEqual(row["regular_score"], 30)
-        self.assertEqual(row["total_score"], 83)
+        self.assertEqual(row["project_score"], 49)
+        self.assertEqual(row["total_score"], 94)
         self.assertEqual(row["project_source"], "manual")
-        self.assertEqual(row["discussion_source"], "manual")
 
     def test_full_score_is_exactly_100(self):
         student = GRADES.Student("2501-01", "2501", 1, "甲")
@@ -122,17 +169,27 @@ class CourseGradesTests(unittest.TestCase):
             by_student={"2501-01": "alice"},
             by_user={"alice": "2501-01"},
         )
-        projects = GRADES.ProjectResult(scores={"2501-01": 30})
+        projects = GRADES.ProjectResult(scores={"2501-01": 100})
         discussions = GRADES.DiscussionResult(
             scores={"2501-01": {17: 100, 20: 100, 22: 100}}
         )
 
+        score_inputs = {
+            "2501-01": {
+                "attendance": 10,
+                "practice_one": 20,
+                "practice_two": 20,
+                "project_override": None,
+                "project_group": "第1组",
+                "note": "",
+            }
+        }
         row = GRADES.calculate_grade(
             student,
             registrations,
             projects,
             discussions,
-            {},
+            score_inputs,
         )
 
         self.assertEqual(row["total_score"], 100)
@@ -147,7 +204,8 @@ class CourseGradesTests(unittest.TestCase):
             {},
         )
         self.assertEqual(row["project_source"], "missing")
-        self.assertEqual(row["discussion_source"], "missing")
+        self.assertIsNone(row["total_score"])
+        self.assertIn("待录入", row["grade_status"])
 
 
 if __name__ == "__main__":

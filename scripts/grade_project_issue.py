@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Grade one course project submitted through a GitHub Issue."""
+"""Grade a group course project submitted through a GitHub Issue."""
 
 from __future__ import annotations
 
@@ -17,24 +17,23 @@ from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
 
 
-STUDENT_ID_PATTERN = re.compile(r"\b(25\d{2}-\d{2})\b")
+STUDENT_ID_PATTERN = re.compile(r"\b25\d{2}-\d{2}\b")
 URL_PATTERN = re.compile(r"https?://[^\s)>]+")
 GRADE_MARKER = "course-project-grade"
-PENDING_MARKER = "course-project-review"
 MODEL_ATTEMPTS = 3
 
-PROJECT_RUBRIC = """你是研究生人工智能课程助教，批改个人课程项目，总分30分。
+PROJECT_RUBRIC = """你是硕士人工智能课程项目评审。按百分制评价项目，课程重在实际参与和成果完成。
 
-课程重在参与。项目链接有效、与人工智能课程相关、能看到实际完成痕迹时，分数不得低于24分。
-从以下方面综合评分：
-1. 项目完成度和实际参与情况。
-2. AI、机器学习、深度学习、大模型或智能工具的合理应用。
-3. 项目说明、运行结果、展示和个人理解。
+综合考察：
+- 项目目标与人工智能技术选择；
+- 实现过程、代码或生成流程的完整性；
+- 实验结果、成果展示与分析；
+- 报告、成员分工和答辩材料的完整性。
 
-优秀且完整的项目可得28-30分；基本完成可得24-27分。
-空内容、明显无关、复制无实际完成痕迹时可以低于24分。
+材料完整、与AI相关且有实际成果的项目通常应在80分以上；优秀项目可给90-100分。
+链接失效、内容明显无关、缺乏实际成果或材料严重不足时可低于80分。
 严格返回JSON对象：
-{"score": 27, "comment": "简洁总评", "strengths": ["优点"], "suggestions": ["建议"]}
+{"score": 88, "comment": "简洁总评", "strengths": ["优点"], "suggestions": ["建议"]}
 """
 
 
@@ -66,55 +65,54 @@ def github_request(
 
 
 def extract_section(body: str, heading: str) -> str:
-    pattern = re.compile(
+    match = re.search(
         rf"###\s*{re.escape(heading)}\s*\n+(.*?)(?=\n###\s|\Z)",
+        body or "",
         re.IGNORECASE | re.DOTALL,
     )
-    match = pattern.search(body)
     return match.group(1).strip() if match else ""
 
 
-def parse_submission(body: str) -> tuple[str, str, str]:
-    student_field = extract_section(body, "唯一编号")
-    url_field = extract_section(body, "项目链接")
-    description = extract_section(body, "项目说明")
-    evidence = extract_section(body, "运行结果")
-
-    student_match = STUDENT_ID_PATTERN.search(student_field or body)
+def parse_submission(body: str) -> dict[str, Any]:
+    project_group = extract_section(body, "项目组")
+    members = sorted(set(STUDENT_ID_PATTERN.findall(extract_section(body, "成员唯一编号"))))
+    url_field = extract_section(body, "成果链接")
     urls = URL_PATTERN.findall(url_field)
-    if not student_match:
-        raise ValueError("未找到有效唯一编号")
+    description = extract_section(body, "项目说明")
+    materials = extract_section(body, "报告与答辩材料")
+    if not project_group:
+        raise ValueError("未填写项目组")
+    if not members:
+        raise ValueError("未找到有效成员编号")
     if not urls:
-        raise ValueError("未找到有效项目链接")
-    return student_match.group(1), urls[0].rstrip(".,，。"), f"{description}\n\n{evidence}".strip()
+        raise ValueError("未找到有效成果链接")
+    return {
+        "project_group": project_group,
+        "members": members,
+        "project_url": urls[0].rstrip(".,，。"),
+        "description": description,
+        "materials": materials,
+    }
 
 
-def inspect_project(url: str, token: str) -> str:
+def inspect_url(url: str, token: str) -> str:
     parsed = urlparse(url)
     if parsed.netloc.lower() == "github.com":
         parts = [part for part in parsed.path.split("/") if part]
         if len(parts) >= 2:
             owner, repo = parts[0], parts[1].removesuffix(".git")
             data = github_request("GET", f"/repos/{owner}/{repo}", token)
-            readme_text = ""
-            try:
-                readme = requests.get(
-                    f"https://raw.githubusercontent.com/{owner}/{repo}/{data['default_branch']}/README.md",
-                    timeout=20,
-                )
-                if readme.ok:
-                    readme_text = readme.text[:12000]
-            except requests.RequestException:
-                pass
+            readme = requests.get(
+                f"https://raw.githubusercontent.com/{owner}/{repo}/{data['default_branch']}/README.md",
+                timeout=20,
+            )
             return (
-                f"GitHub仓库：{data['full_name']}\n"
+                f"仓库：{data['full_name']}\n"
                 f"描述：{data.get('description') or ''}\n"
                 f"主要语言：{data.get('language') or ''}\n"
-                f"仓库大小：{data.get('size', 0)} KB\n"
-                f"默认分支：{data['default_branch']}\n"
-                f"README：\n{readme_text}"
+                f"大小：{data.get('size', 0)} KB\n"
+                f"README：\n{readme.text[:12000] if readme.ok else ''}"
             )
-
     response = requests.get(
         url,
         headers={"User-Agent": "ai-course-project-grader"},
@@ -124,7 +122,7 @@ def inspect_project(url: str, token: str) -> str:
     response.raise_for_status()
     content_type = response.headers.get("content-type", "")
     if "text" not in content_type and "json" not in content_type:
-        return f"链接可访问，内容类型：{content_type}，大小：{len(response.content)} bytes"
+        return f"链接可访问；类型：{content_type}；大小：{len(response.content)} bytes"
     return response.text[:12000]
 
 
@@ -135,8 +133,8 @@ def parse_grade(raw: str) -> dict[str, Any]:
     if not isinstance(result, dict):
         raise ValueError("模型返回结果不是JSON对象")
     score = float(result["score"])
-    if not 0 <= score <= 30:
-        raise ValueError("项目分数超出0-30范围")
+    if not 0 <= score <= 100:
+        raise ValueError("项目分数超出0-100范围")
     result["score"] = round(score, 2)
     return result
 
@@ -161,33 +159,27 @@ def call_model(client: OpenAI, model: str, prompt: str) -> dict[str, Any]:
     raise RuntimeError(f"模型评分失败：{last_error}")
 
 
-def submission_hash(student_id: str, project_url: str, issue_body: str) -> str:
-    payload = f"{student_id}\n{project_url}\n{issue_body}".encode()
-    return hashlib.sha256(payload).hexdigest()[:16]
+def submission_hash(issue_body: str) -> str:
+    return hashlib.sha256(issue_body.encode()).hexdigest()[:16]
 
 
-def already_graded(comments: list[dict[str, Any]], digest: str) -> bool:
-    marker = f"<!-- {GRADE_MARKER}:{digest} -->"
-    return any(marker in (comment.get("body") or "") for comment in comments)
-
-
-def format_grade_comment(result: dict[str, Any], digest: str) -> str:
+def format_reply(result: dict[str, Any], digest: str) -> str:
     strengths = "\n".join(f"- {item}" for item in result.get("strengths", []) or [])
     suggestions = "\n".join(f"- {item}" for item in result.get("suggestions", []) or [])
-    parts = [
+    lines = [
         f"<!-- {GRADE_MARKER}:{digest} -->",
         "项目自动评分：",
         "",
-        f"分数：{result['score']}/30",
+        f"分数：{result['score']}/100",
         "",
         f"评语：{result.get('comment', '')}",
     ]
     if strengths:
-        parts.extend(["", "优点：", strengths])
+        lines.extend(["", "优点：", strengths])
     if suggestions:
-        parts.extend(["", "建议：", suggestions])
-    parts.extend(["", "说明：本结果由大模型辅助生成，最终成绩以老师复核为准。"])
-    return "\n".join(parts)
+        lines.extend(["", "建议：", suggestions])
+    lines.extend(["", "说明：本结果由大模型辅助生成，异常情况由老师复核。"])
+    return "\n".join(lines)
 
 
 def main() -> None:
@@ -205,39 +197,23 @@ def main() -> None:
     if "project-submission" not in labels:
         print("跳过：不是项目提交Issue")
         return
-
-    try:
-        student_id, project_url, description = parse_submission(issue.get("body") or "")
-    except ValueError as error:
-        fail(str(error))
-
-    digest = submission_hash(student_id, project_url, issue.get("body") or "")
+    body = issue.get("body") or ""
+    submission = parse_submission(body)
+    digest = submission_hash(body)
     comments = github_request(
         "GET",
         f"/repos/{owner}/{repo}/issues/{issue_number}/comments?per_page=100",
         token,
     )
-    if already_graded(comments, digest):
+    marker = f"<!-- {GRADE_MARKER}:{digest} -->"
+    if any(marker in (comment.get("body") or "") for comment in comments):
         print("跳过：当前版本已经评分")
         return
 
     try:
-        project_context = inspect_project(project_url, token)
+        evidence = inspect_url(submission["project_url"], token)
     except (requests.RequestException, KeyError, ValueError) as error:
-        body = (
-            f"<!-- {PENDING_MARKER}:{digest} -->\n"
-            "项目链接暂时无法核验，已进入人工复核。\n\n"
-            f"链接：{project_url}\n\n"
-            "请确认链接公开可访问后更新本 Issue。"
-        )
-        github_request(
-            "POST",
-            f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
-            token,
-            json_body={"body": body},
-        )
-        print(f"待人工复核：{error}")
-        return
+        fail(f"成果链接无法核验：{error}")
 
     client = OpenAI(
         api_key=api_key,
@@ -249,19 +225,21 @@ def main() -> None:
         client,
         os.getenv("OPENAI_MODEL", "qwen-flash"),
         (
-            f"唯一编号：{student_id}\n"
-            f"项目链接：{project_url}\n"
-            f"学生说明：\n{description}\n\n"
-            f"项目核验信息：\n{project_context}"
+            f"项目组：{submission['project_group']}\n"
+            f"成员编号：{'、'.join(submission['members'])}\n"
+            f"成果链接：{submission['project_url']}\n"
+            f"项目说明：\n{submission['description']}\n\n"
+            f"报告与答辩材料：\n{submission['materials']}\n\n"
+            f"成果核验信息：\n{evidence}"
         ),
     )
     github_request(
         "POST",
         f"/repos/{owner}/{repo}/issues/{issue_number}/comments",
         token,
-        json_body={"body": format_grade_comment(result, digest)},
+        json_body={"body": format_reply(result, digest)},
     )
-    print(f"完成：{student_id} {result['score']}/30")
+    print(f"完成：{submission['project_group']} {result['score']}/100")
 
 
 if __name__ == "__main__":
