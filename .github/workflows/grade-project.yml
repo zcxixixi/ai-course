@@ -21,14 +21,14 @@ jobs:
       contains(github.event.issue.labels.*.name, 'project-submission')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install openai requests python-dotenv
+        run: pip install -r requirements-grading.txt
 
       - name: Grade project
         env:

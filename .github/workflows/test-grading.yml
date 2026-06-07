@@ -1,0 +1,46 @@
+name: Test Grading Scripts
+
+on:
+  push:
+    paths:
+      - ".github/workflows/grade-discussion.yml"
+      - ".github/workflows/grade-project.yml"
+      - ".github/workflows/test-grading.yml"
+      - "requirements-grading.txt"
+      - "scripts/course_grades.py"
+      - "scripts/grade_github_discussion.py"
+      - "scripts/grade_project_issue.py"
+      - "tests/test_course_grades.py"
+      - "tests/test_grade_github_discussion.py"
+      - "tests/test_grade_project_issue.py"
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - "requirements-grading.txt"
+      - "scripts/**"
+      - "tests/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-grading.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-grading.txt
+
+      - name: Compile scripts
+        run: python -m py_compile scripts/*.py tests/*.py
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v

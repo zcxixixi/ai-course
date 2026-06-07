@@ -1,0 +1,4 @@
+openai>=2.26,<3
+openpyxl>=3.1,<4
+python-dotenv>=1,<2
+requests>=2.32,<3
