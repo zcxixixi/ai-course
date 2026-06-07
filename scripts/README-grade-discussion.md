@@ -82,6 +82,7 @@ python scripts/grade_github_discussion.py --self-test
 ```text
 #17 课后讨论：AI、大模型、Agent 与模型训练
 #20 课后讨论：机器学习基础概念与应用场景
+#22 第四节课讨论：神经网络基础与 Demo 05
 ```
 
 需要在仓库设置里添加 Secret：

@@ -7,6 +7,9 @@ venv/
 env/
 .env
 outputs/
+local_grades/
+*名单*.xlsx
+成绩人工覆盖.xlsx
 我自己学习资料/references/
 
 # 官方课件原始文件体积较大，先保留在本地；后续安装 Git LFS 后再纳入版本管理。

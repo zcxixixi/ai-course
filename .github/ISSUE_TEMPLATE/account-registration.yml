@@ -1,0 +1,25 @@
+name: GitHub 账号登记
+description: 使用课程唯一编号登记当前 GitHub 账号
+title: "[账号登记] "
+labels:
+  - account-registration
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请填写课程唯一编号。不要填写姓名、学号、手机号或其他个人敏感信息。
+  - type: input
+    id: student_id
+    attributes:
+      label: 唯一编号
+      description: 格式为“班级-两位序号”，例如 2501-01。
+      placeholder: "2501-01"
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: 确认
+      options:
+        - label: 我确认编号填写正确，并使用当前 GitHub 账号完成登记。
+          required: true

@@ -10,6 +10,7 @@ tqdm
 python-dotenv
 openai
 requests
+openpyxl
 tiktoken
 scikit-learn
 scipy
