@@ -189,7 +189,7 @@ def github_graphql(token: str, query: str, variables: dict[str, Any]) -> dict[st
     response.raise_for_status()
     payload = response.json()
     if payload.get("errors"):
-        fail(json.dumps(payload["errors"], ensure_ascii=False))
+        raise RuntimeError(json.dumps(payload["errors"], ensure_ascii=False))
     return payload["data"]
 
 
@@ -632,10 +632,14 @@ def main() -> None:
                 reply_url = post_reply(github_token, discussion_id, comment.comment_id, format_reply(result))
                 result["reply_posted_url"] = reply_url
                 print(f"  已回帖：{reply_url}")
-            except (requests.RequestException, KeyError, SystemExit) as error:
-                failures.append(f"{comment.author}: GitHub 回帖失败：{error}")
-                result["reply_skipped_reason"] = "post_failed"
-                print(f"  回帖失败：{error}", file=sys.stderr)
+            except (requests.RequestException, KeyError, RuntimeError) as error:
+                if "NOT_FOUND" in str(error) or "Could not resolve to a node" in str(error):
+                    result["reply_skipped_reason"] = "comment_deleted"
+                    print("  跳过：提交在批改期间已被删除", file=sys.stderr)
+                else:
+                    failures.append(f"{comment.author}: GitHub 回帖失败：{error}")
+                    result["reply_skipped_reason"] = "post_failed"
+                    print(f"  回帖失败：{error}", file=sys.stderr)
 
         result_by_url[comment.url] = result
 
