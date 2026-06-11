@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   grade:
+    if: github.event_name != 'discussion_comment' || github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
