@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import Workbook
 
@@ -99,22 +100,25 @@ class CourseGradesTests(unittest.TestCase):
         self.assertEqual(result.groups, {member: "第1组" for member in members})
         self.assertEqual(result.rows[0]["status"], "graded")
 
-    def test_ai_project_score_is_scaled_to_fifty_points(self):
+    def test_ai_scores_are_scaled_to_course_weights(self):
         student = GRADES.Student("2501-01", "2501", 1, "甲")
         registrations = GRADES.RegistrationResult(
             by_student={"2501-01": "alice"},
             by_user={"alice": "2501-01"},
         )
         projects = GRADES.ProjectResult(scores={"2501-01": 90})
+        assignments = GRADES.AssignmentResult(
+            scores={"2501-01": {"project_one": 90, "project_two": 80}}
+        )
         discussions = GRADES.DiscussionResult(
             scores={"2501-01": {17: 90, 20: 80}}
         )
         score_inputs = {
             "2501-01": {
                 "attendance": 10,
-                "practice_one": 20,
-                "practice_two": 20,
-                "project_override": None,
+                "project_one_override": None,
+                "project_two_override": None,
+                "final_project_override": None,
                 "project_group": "第1组",
                 "note": "",
             }
@@ -124,28 +128,34 @@ class CourseGradesTests(unittest.TestCase):
             student,
             registrations,
             projects,
+            assignments,
             discussions,
             score_inputs,
         )
 
         self.assertEqual(row["discussion_average"], 56.67)
-        self.assertEqual(row["project_score"], 45)
-        self.assertEqual(row["total_score"], 95)
-        self.assertEqual(row["project_source"], "ai")
+        self.assertEqual(row["project_one_score"], 18)
+        self.assertEqual(row["project_two_score"], 16)
+        self.assertEqual(row["final_project_score"], 45)
+        self.assertEqual(row["total_score"], 89)
+        self.assertEqual(row["final_project_source"], "ai")
 
     def test_manual_project_override_takes_precedence(self):
         student = GRADES.Student("2501-01", "2501", 1, "甲")
         registrations = GRADES.RegistrationResult()
         projects = GRADES.ProjectResult(scores={"2501-01": 70})
+        assignments = GRADES.AssignmentResult(
+            scores={"2501-01": {"project_one": 70, "project_two": 70}}
+        )
         discussions = GRADES.DiscussionResult(
             scores={"2501-01": {17: 100, 20: 100, 22: 100}}
         )
         score_inputs = {
             "2501-01": {
                 "attendance": 8,
-                "practice_one": 18,
-                "practice_two": 19,
-                "project_override": 49,
+                "project_one_override": 18,
+                "project_two_override": 19,
+                "final_project_override": 49,
                 "project_group": "第1组",
                 "note": "人工复核",
             }
@@ -155,13 +165,14 @@ class CourseGradesTests(unittest.TestCase):
             student,
             registrations,
             projects,
+            assignments,
             discussions,
             score_inputs,
         )
 
-        self.assertEqual(row["project_score"], 49)
+        self.assertEqual(row["final_project_score"], 49)
         self.assertEqual(row["total_score"], 94)
-        self.assertEqual(row["project_source"], "manual")
+        self.assertEqual(row["final_project_source"], "manual")
 
     def test_full_score_is_exactly_100(self):
         student = GRADES.Student("2501-01", "2501", 1, "甲")
@@ -170,6 +181,9 @@ class CourseGradesTests(unittest.TestCase):
             by_user={"alice": "2501-01"},
         )
         projects = GRADES.ProjectResult(scores={"2501-01": 100})
+        assignments = GRADES.AssignmentResult(
+            scores={"2501-01": {"project_one": 100, "project_two": 100}}
+        )
         discussions = GRADES.DiscussionResult(
             scores={"2501-01": {17: 100, 20: 100, 22: 100}}
         )
@@ -177,9 +191,9 @@ class CourseGradesTests(unittest.TestCase):
         score_inputs = {
             "2501-01": {
                 "attendance": 10,
-                "practice_one": 20,
-                "practice_two": 20,
-                "project_override": None,
+                "project_one_override": None,
+                "project_two_override": None,
+                "final_project_override": None,
                 "project_group": "第1组",
                 "note": "",
             }
@@ -188,6 +202,7 @@ class CourseGradesTests(unittest.TestCase):
             student,
             registrations,
             projects,
+            assignments,
             discussions,
             score_inputs,
         )
@@ -200,12 +215,47 @@ class CourseGradesTests(unittest.TestCase):
             student,
             GRADES.RegistrationResult(),
             GRADES.ProjectResult(),
+            GRADES.AssignmentResult(),
             GRADES.DiscussionResult(),
             {},
         )
-        self.assertEqual(row["project_source"], "missing")
+        self.assertEqual(row["final_project_source"], "missing")
         self.assertIsNone(row["total_score"])
         self.assertIn("待录入", row["grade_status"])
+
+    @patch.object(GRADES, "fetch_discussion_comments")
+    def test_assignment_uses_student_id_from_submission_without_registration(self, fetch):
+        comments = [
+            {
+                "url": "https://example.test/comment",
+                "bodyText": "编号：2501-01\n作业：实践1\n完整报告",
+                "createdAt": "2026-06-01T00:00:00Z",
+                "updatedAt": "2026-06-01T00:00:00Z",
+                "author": {"login": "alice"},
+                "replies": {
+                    "nodes": [
+                        {
+                            "bodyText": "自动批改反馈：\n分数：90/100",
+                            "url": "https://example.test/grade",
+                            "createdAt": "2026-06-01T01:00:00Z",
+                        }
+                    ]
+                },
+            }
+        ]
+        fetch.side_effect = [
+            ("项目一", "https://example.test/d24", comments),
+            ("项目二", "https://example.test/d25", []),
+        ]
+
+        result = GRADES.build_assignments(
+            object(),
+            {"2501-01"},
+            {},
+        )
+
+        self.assertEqual(result.scores["2501-01"]["project_one"], 90)
+        self.assertEqual(result.rows[0]["scaled_score"], 18)
 
 
 if __name__ == "__main__":

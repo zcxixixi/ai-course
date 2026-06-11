@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -48,10 +50,40 @@ JSON 格式：
 }
 """
 
+ASSIGNMENT_RUBRIC = """你是硕士人工智能课程实验报告评审。请根据作业要求批改学生提交的文字版或 Markdown 报告。
 
-AUTO_GRADE_MARKER = "<!-- ai-course-auto-grade -->"
+内容基础分按百分制综合评价：
+- 报告内容完整性：25 分
+- 技术理解与概念准确性：25 分
+- 实现过程、代码或操作说明：20 分
+- 实验结果、证据与可复现性：20 分
+- 结果分析与个人理解：10 分
+
+批改要求：
+- 有效提交的内容基础分必须在 81-99 分；系统之后会统一做格式微调。
+- 明显空白、跑题、无实际实验内容或仅有无效链接时，valid_submission=false 且 score=0。
+- 不要把“内容看起来可能由 AI 辅助”直接当作无效提交，但要标记风险和具体原因。
+- 评语简洁、具体、可执行。
+- 严格返回 JSON，不要返回 Markdown。
+
+JSON 格式：
+{
+  "valid_submission": true,
+  "score": 88,
+  "comment": "一句话总评",
+  "strengths": ["优点1", "优点2"],
+  "suggestions": ["建议1", "建议2"],
+  "ai_copy_risk": "low|medium|high",
+  "ai_copy_reason": "简短原因"
+}
+"""
+
+AUTO_GRADE_MARKER = "ai-course-auto-grade"
 AUTO_GRADE_TITLE = "自动批改反馈："
 MODEL_ATTEMPTS = 3
+ASSIGNMENT_DISCUSSIONS = {24: "项目一", 25: "项目二"}
+STUDENT_ID_PATTERN = re.compile(r"\b(25\d{2})[-_](\d{1,2})\b")
+MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]*\]\((https://github\.com/user-attachments/files/[^)\s]+)\)")
 
 
 DISCUSSION_QUERY = """
@@ -60,6 +92,7 @@ query($owner:String!, $repo:String!, $number:Int!, $after:String) {
     discussion(number:$number) {
       id
       title
+      body
       bodyText
       comments(first:100, after:$after) {
         pageInfo {
@@ -69,6 +102,7 @@ query($owner:String!, $repo:String!, $number:Int!, $after:String) {
         nodes {
           id
           url
+          body
           bodyText
           createdAt
           updatedAt
@@ -77,6 +111,7 @@ query($owner:String!, $repo:String!, $number:Int!, $after:String) {
           }
           replies(first:100) {
             nodes {
+              body
               bodyText
             }
           }
@@ -112,6 +147,9 @@ class DiscussionComment:
     created_at: str
     updated_at: str
     has_grade_reply: bool = False
+    student_id: str = ""
+    submission_format: str = "plain_text"
+    source_digest: str = ""
 
 
 def fail(message: str) -> None:
@@ -173,22 +211,31 @@ def fetch_comments(owner: str, repo: str, number: int, token: str) -> tuple[str,
             fail(f"找不到 discussion #{number}")
 
         title = discussion["title"]
-        body = discussion["bodyText"] or ""
+        body = discussion["body"] or discussion["bodyText"] or ""
         discussion_id = discussion["id"]
         page = discussion["comments"]
         for node in page["nodes"]:
             replies = node["replies"]["nodes"]
+            digest = submission_digest(node["body"] or node["bodyText"] or "")
+            current_marker = f"<!-- {AUTO_GRADE_MARKER}:{digest} -->"
             comments.append(
                 DiscussionComment(
                     comment_id=node["id"],
                     author=(node["author"] or {}).get("login", "unknown"),
-                    body=node["bodyText"] or "",
+                    body=node["body"] or node["bodyText"] or "",
                     url=node["url"],
                     created_at=node["createdAt"],
                     updated_at=node["updatedAt"],
+                    source_digest=digest,
                     has_grade_reply=any(
-                        AUTO_GRADE_MARKER in (reply["bodyText"] or "")
-                        or AUTO_GRADE_TITLE in (reply["bodyText"] or "")
+                        current_marker in (reply["body"] or "")
+                        or (
+                            number not in ASSIGNMENT_DISCUSSIONS
+                            and (
+                                AUTO_GRADE_MARKER in (reply["body"] or "")
+                                or AUTO_GRADE_TITLE in (reply["bodyText"] or "")
+                            )
+                        )
                         for reply in replies
                     ),
                 )
@@ -199,6 +246,38 @@ def fetch_comments(owner: str, repo: str, number: int, token: str) -> tuple[str,
         after = page["pageInfo"]["endCursor"]
 
     return discussion_id, title, body, comments
+
+
+def normalize_student_id(value: str) -> str:
+    match = STUDENT_ID_PATTERN.search(value or "")
+    return f"{match.group(1)}-{int(match.group(2)):02d}" if match else ""
+
+
+def submission_digest(body: str) -> str:
+    return hashlib.sha256((body or "").encode()).hexdigest()[:16]
+
+
+def detect_submission_format(body: str) -> str:
+    markdown_signals = (
+        len(re.findall(r"(?m)^#{1,6}\s+", body or ""))
+        + len(re.findall(r"(?m)^\s*[-*+]\s+", body or ""))
+        + (body or "").count("```")
+        + len(re.findall(r"(?m)^\s*\|.*\|\s*$", body or ""))
+    )
+    return "markdown" if markdown_signals >= 2 else "plain_text"
+
+
+def expand_markdown_attachments(body: str) -> str:
+    expanded = body or ""
+    for url in MARKDOWN_LINK_PATTERN.findall(body or ""):
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as error:
+            expanded += f"\n\n[Markdown 附件读取失败：{error}]"
+            continue
+        expanded += f"\n\n--- Markdown 附件内容 ---\n{response.text[:30000]}"
+    return expanded
 
 
 def parse_grade(raw: str) -> dict[str, Any]:
@@ -218,6 +297,10 @@ def parse_grade(raw: str) -> dict[str, Any]:
             continue
         if not isinstance(result, dict):
             raise ValueError("模型返回的 JSON 不是对象")
+        score = float(result["score"])
+        if not 0 <= score <= 100:
+            raise ValueError("模型分数超出0-100范围")
+        result["score"] = score
         return result
 
     if last_error is not None:
@@ -231,9 +314,12 @@ def grade_comment(
     discussion_title: str,
     discussion_body: str,
     comment: DiscussionComment,
+    *,
+    assignment_mode: bool = False,
 ) -> dict[str, Any]:
+    rubric = ASSIGNMENT_RUBRIC if assignment_mode else DEFAULT_RUBRIC
     messages = [
-        {"role": "system", "content": DEFAULT_RUBRIC},
+        {"role": "system", "content": rubric},
         {
             "role": "user",
             "content": (
@@ -270,12 +356,25 @@ def grade_comment(
     else:
         raise RuntimeError(f"模型批改失败：{last_error}")
 
+    if assignment_mode:
+        valid_submission = bool(result.get("valid_submission", result["score"] > 0))
+        if valid_submission:
+            base_score = min(99.0, max(81.0, float(result["score"])))
+            adjustment = 1.0 if comment.submission_format == "markdown" else -1.0
+            result["score"] = round(min(100.0, max(80.0, base_score + adjustment)), 2)
+        else:
+            result["score"] = 0.0
+        result["valid_submission"] = valid_submission
+
     result["author"] = comment.author
     result["comment_id"] = comment.comment_id
     result["comment_url"] = comment.url
     result["created_at"] = comment.created_at
     result["updated_at"] = comment.updated_at
     result["has_grade_reply"] = comment.has_grade_reply
+    result["student_id"] = comment.student_id
+    result["submission_format"] = comment.submission_format
+    result["submission_digest"] = comment.source_digest or submission_digest(comment.body)
     return result
 
 
@@ -285,9 +384,10 @@ def format_reply(result: dict[str, Any]) -> str:
     score = result.get("score", 0)
 
     lines = [
-        AUTO_GRADE_MARKER,
+        f"<!-- {AUTO_GRADE_MARKER}:{result.get('submission_digest', '')} -->",
         AUTO_GRADE_TITLE,
         "",
+        *([f"编号：{result['student_id']}", ""] if result.get("student_id") else []),
         f"分数：{score}/100",
         "",
         f"评语：{result.get('comment', '')}",
@@ -322,6 +422,11 @@ def post_reply(token: str, discussion_id: str, comment_id: str, body: str) -> st
 def normalize_row(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "author": result.get("author", ""),
+        "student_id": result.get("student_id", ""),
+        "discussion_number": result.get("discussion_number", ""),
+        "assignment": result.get("assignment", ""),
+        "submission_format": result.get("submission_format", ""),
+        "valid_submission": result.get("valid_submission", ""),
         "score": result.get("score", ""),
         "comment": result.get("comment", ""),
         "strengths": "；".join(result.get("strengths", []) or []),
@@ -342,6 +447,11 @@ def write_outputs(results: list[dict[str, Any]], output_dir: Path, discussion_nu
 
     fieldnames = [
         "author",
+        "student_id",
+        "discussion_number",
+        "assignment",
+        "submission_format",
+        "valid_submission",
         "score",
         "comment",
         "strengths",
@@ -365,6 +475,22 @@ def write_outputs(results: list[dict[str, Any]], output_dir: Path, discussion_nu
             file.write(json.dumps(result, ensure_ascii=False) + "\n")
 
     return csv_path, jsonl_path
+
+
+def read_existing_results(output_dir: Path, discussion_number: int) -> dict[str, dict[str, Any]]:
+    path = output_dir / f"discussion_{discussion_number}_grades.jsonl"
+    if not path.exists():
+        return {}
+    results: dict[str, dict[str, Any]] = {}
+    with path.open(encoding="utf-8") as file:
+        for line in file:
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            comment_url = str(row.get("comment_url") or "")
+            if comment_url:
+                results[comment_url] = row
+    return results
 
 
 def select_comments(
@@ -392,6 +518,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--limit", type=int, default=0, help="Only grade the first N comments. 0 means all.")
     parser.add_argument("--post-replies", action="store_true", help="Post grading feedback as replies on GitHub.")
     parser.add_argument("--force-post", action="store_true", help="Post even if an auto-grade reply already exists.")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Skip unchanged comments already present in the local JSONL output.",
+    )
     parser.add_argument("--self-test", action="store_true", help="Call the model with sample answers, then exit.")
     return parser
 
@@ -450,23 +581,51 @@ def main() -> None:
         args.discussion,
         github_token,
     )
+    assignment_mode = args.discussion in ASSIGNMENT_DISCUSSIONS
+    for comment in all_comments:
+        comment.body = expand_markdown_attachments(comment.body)
+        comment.student_id = normalize_student_id(comment.body) or normalize_student_id(
+            comment.author
+        )
+        comment.submission_format = detect_submission_format(comment.body)
     total_comments = len([comment for comment in all_comments if comment.body.strip()])
     comments = select_comments(all_comments, args.post_replies, args.force_post, args.limit)
+    output_dir = Path(args.output_dir)
+    result_by_url = (
+        read_existing_results(output_dir, args.discussion) if args.resume else {}
+    )
+    if args.resume:
+        comments = [
+            comment
+            for comment in comments
+            if result_by_url.get(comment.url, {}).get("updated_at")
+            != comment.updated_at
+        ]
 
     print(f"Discussion: {title}")
     print(f"有效评论数: {total_comments}")
     print(f"待批改评论数: {len(comments)}")
 
-    results: list[dict[str, Any]] = []
     failures: list[str] = []
     for index, comment in enumerate(comments, start=1):
         print(f"[{index}/{len(comments)}] 批改 {comment.author} ...")
         try:
-            result = grade_comment(client, args.model, title, discussion_body, comment)
+            result = grade_comment(
+                client,
+                args.model,
+                title,
+                discussion_body,
+                comment,
+                assignment_mode=assignment_mode,
+            )
         except RuntimeError as error:
             failures.append(f"{comment.author}: {error}")
             print(f"  跳过：{error}", file=sys.stderr)
             continue
+
+        result["discussion_number"] = args.discussion
+        result["discussion_title"] = title
+        result["assignment"] = ASSIGNMENT_DISCUSSIONS.get(args.discussion, "")
 
         if args.post_replies:
             try:
@@ -478,9 +637,14 @@ def main() -> None:
                 result["reply_skipped_reason"] = "post_failed"
                 print(f"  回帖失败：{error}", file=sys.stderr)
 
-        results.append(result)
+        result_by_url[comment.url] = result
 
-    csv_path, jsonl_path = write_outputs(results, Path(args.output_dir), args.discussion)
+    results = [
+        result_by_url[comment.url]
+        for comment in all_comments
+        if comment.url in result_by_url
+    ]
+    csv_path, jsonl_path = write_outputs(results, output_dir, args.discussion)
     print(f"完成：{csv_path}")
     print(f"完成：{jsonl_path}")
     if failures:

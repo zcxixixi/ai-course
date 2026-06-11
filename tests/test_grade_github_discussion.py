@@ -57,6 +57,11 @@ class GradeDiscussionTests(unittest.TestCase):
         self.assertEqual(len(selected), 1)
         self.assertFalse(selected[0].has_grade_reply)
 
+    def test_student_id_and_markdown_format_are_detected(self):
+        body = "编号：2503_7\n\n## 实验目标\n\n- 完成模型训练\n- 分析结果"
+        self.assertEqual(GRADER.normalize_student_id(body), "2503-07")
+        self.assertEqual(GRADER.detect_submission_format(body), "markdown")
+
     @patch.object(GRADER.time, "sleep")
     def test_grade_comment_retries_malformed_json(self, sleep):
         completions = FakeCompletions(
@@ -87,6 +92,39 @@ class GradeDiscussionTests(unittest.TestCase):
         self.assertEqual(result["score"], 90)
         self.assertEqual(completions.calls, 2)
         sleep.assert_called_once_with(1)
+
+    def test_assignment_score_applies_consistent_format_adjustment(self):
+        completions = FakeCompletions(
+            [
+                json.dumps(
+                    {
+                        "valid_submission": True,
+                        "score": 88,
+                        "comment": "ok",
+                        "strengths": [],
+                        "suggestions": [],
+                        "ai_copy_risk": "low",
+                        "ai_copy_reason": "",
+                    }
+                )
+            ]
+        )
+        client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+        comment = self.make_comment(body="## 实验\n- 结果")
+        comment.student_id = "2501-01"
+        comment.submission_format = "markdown"
+
+        result = GRADER.grade_comment(
+            client,
+            "test-model",
+            "项目一",
+            "要求",
+            comment,
+            assignment_mode=True,
+        )
+
+        self.assertEqual(result["score"], 89)
+        self.assertEqual(result["student_id"], "2501-01")
 
 
 if __name__ == "__main__":
