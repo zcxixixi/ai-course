@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MoveNet 关节点识别 Demo</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      --bg: #101511;
+      --panel: #f1ead8;
+      --ink: #121512;
+      --muted: #657064;
+      --line: #101511;
+      --lime: #b7ff3c;
+      --orange: #ff8c32;
+      --blue: #67d5ff;
+      --red: #ff4f4f;
+      --white: #fffaf0;
+      --shadow: 8px 8px 0 #000;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--panel);
+      background:
+        linear-gradient(90deg, rgba(183,255,60,.08) 1px, transparent 1px) 0 0 / 36px 36px,
+        linear-gradient(rgba(183,255,60,.06) 1px, transparent 1px) 0 0 / 36px 36px,
+        var(--bg);
+      font-family: "Avenir Next", "Trebuchet MS", "PingFang SC", sans-serif;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: 390px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      border-right: 3px solid var(--lime);
+      padding: 26px 22px;
+      background: rgba(16, 21, 17, .92);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(42px, 5vw, 70px);
+      line-height: .9;
+      letter-spacing: 0;
+      font-weight: 900;
+      max-width: 6ch;
+    }
+
+    .kicker {
+      display: inline-block;
+      margin-bottom: 16px;
+      padding: 7px 9px;
+      border: 2px solid var(--lime);
+      color: var(--lime);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .14em;
+    }
+
+    .lead {
+      color: #cbd7c5;
+      font-size: 16px;
+      line-height: 1.6;
+      margin: 22px 0;
+      font-weight: 700;
+    }
+
+    .controls,
+    .readout,
+    .legend {
+      border: 2px solid var(--lime);
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+      padding: 15px;
+      margin-top: 18px;
+    }
+
+    button {
+      width: 100%;
+      min-height: 44px;
+      display: grid;
+      place-items: center;
+      margin-top: 10px;
+      border: 2px solid var(--line);
+      background: var(--lime);
+      color: var(--ink);
+      font-weight: 900;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    button.secondary {
+      background: var(--white);
+    }
+
+    button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+
+    .slider {
+      margin-top: 14px;
+      display: grid;
+      gap: 7px;
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--lime);
+    }
+
+    .stage-wrap {
+      padding: 26px;
+      display: grid;
+      align-items: center;
+    }
+
+    .stage {
+      position: relative;
+      width: min(100%, 1100px);
+      margin: auto;
+      aspect-ratio: 16 / 10;
+      border: 3px solid var(--lime);
+      background: #060806;
+      box-shadow: 14px 14px 0 #000;
+      overflow: hidden;
+    }
+
+    video,
+    #overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    video {
+      transform: scaleX(-1);
+      display: none;
+    }
+
+    #overlay {
+      z-index: 2;
+    }
+
+    .empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      color: #cad9c6;
+      text-align: center;
+      font-size: clamp(18px, 2vw, 28px);
+      font-weight: 900;
+      line-height: 1.35;
+    }
+
+    .status {
+      color: var(--lime);
+      font-size: 14px;
+      line-height: 1.45;
+      min-height: 40px;
+      font-weight: 800;
+    }
+
+    .metric {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 0;
+      border-bottom: 1px solid rgba(16,21,17,.2);
+      font-size: 13px;
+      font-weight: 900;
+    }
+
+    .metric:last-child { border-bottom: 0; }
+
+    .dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      margin-right: 8px;
+      border: 1px solid var(--line);
+      vertical-align: middle;
+    }
+
+    .dot.lime { background: var(--lime); }
+    .dot.blue { background: var(--blue); }
+    .dot.orange { background: var(--orange); }
+
+    .legend p {
+      margin: 8px 0 0;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    @media (max-width: 920px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 3px solid var(--lime); }
+      h1 { max-width: 12ch; }
+      .stage-wrap { padding: 18px; }
+      .stage { aspect-ratio: 4 / 5; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <aside>
+      <span class="kicker">MoveNet Lightning</span>
+      <h1>人体关节点识别</h1>
+      <p class="lead">轻量姿态估计 demo。识别当前摄像头画面里的 17 个关键点：鼻子、眼、耳、肩、肘、腕、髋、膝、踝。首次加载会从 TensorFlow 模型源下载模型，推理在本机浏览器里跑。</p>
+
+      <div class="status" id="status">正在加载 TensorFlow.js 和 MoveNet 模型...</div>
+
+      <section class="controls" aria-label="控制区">
+        <button id="cameraBtn" disabled>开启摄像头</button>
+        <button class="secondary" id="stopBtn" disabled>停止摄像头</button>
+
+        <label class="slider">
+          置信度阈值：<span id="thresholdText">0.30</span>
+          <input id="threshold" type="range" min="0.05" max="0.85" value="0.30" step="0.05">
+        </label>
+      </section>
+
+      <section class="readout" aria-label="识别统计">
+        <div class="metric"><span>模型</span><span id="modelName">MoveNet Lightning</span></div>
+        <div class="metric"><span>FPS</span><span id="fps">0</span></div>
+        <div class="metric"><span>可见关节点</span><span id="visibleCount">0 / 17</span></div>
+        <div class="metric"><span>最高置信度</span><span id="maxScore">0.00</span></div>
+      </section>
+
+      <section class="legend" aria-label="图例">
+        <strong><span class="dot lime"></span>关节点</strong>
+        <p><span class="dot blue"></span>骨架连线</p>
+        <p><span class="dot orange"></span>低于阈值的点不会绘制。</p>
+      </section>
+    </aside>
+
+    <section class="stage-wrap">
+      <div class="stage">
+        <video id="video" playsinline muted></video>
+        <canvas id="overlay"></canvas>
+        <div class="empty" id="empty">开启摄像头后，会实时显示画面并叠加人体关节点。</div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.22.0/dist/tf-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.22.0/dist/tf-converter.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.22.0/dist/tf-backend-webgl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-cpu@4.22.0/dist/tf-backend-cpu.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+
+  <script>
+    const KEYPOINT_NAMES = [
+      "nose", "left_eye", "right_eye", "left_ear", "right_ear",
+      "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+      "left_wrist", "right_wrist", "left_hip", "right_hip",
+      "left_knee", "right_knee", "left_ankle", "right_ankle"
+    ];
+
+    const EDGES = [
+      ["left_shoulder", "right_shoulder"], ["left_shoulder", "left_elbow"],
+      ["left_elbow", "left_wrist"], ["right_shoulder", "right_elbow"],
+      ["right_elbow", "right_wrist"], ["left_shoulder", "left_hip"],
+      ["right_shoulder", "right_hip"], ["left_hip", "right_hip"],
+      ["left_hip", "left_knee"], ["left_knee", "left_ankle"],
+      ["right_hip", "right_knee"], ["right_knee", "right_ankle"]
+    ];
+
+    const els = {
+      status: document.querySelector("#status"),
+      cameraBtn: document.querySelector("#cameraBtn"),
+      stopBtn: document.querySelector("#stopBtn"),
+      threshold: document.querySelector("#threshold"),
+      thresholdText: document.querySelector("#thresholdText"),
+      video: document.querySelector("#video"),
+      overlay: document.querySelector("#overlay"),
+      empty: document.querySelector("#empty"),
+      fps: document.querySelector("#fps"),
+      visibleCount: document.querySelector("#visibleCount"),
+      maxScore: document.querySelector("#maxScore")
+    };
+
+    let detector;
+    let stream;
+    let running = false;
+    let lastTime = performance.now();
+
+    function setStatus(text) {
+      els.status.textContent = text;
+    }
+
+    function threshold() {
+      return Number(els.threshold.value);
+    }
+
+    async function init() {
+      try {
+        await tf.setBackend("webgl");
+        await tf.ready();
+        detector = await poseDetection.createDetector(
+          poseDetection.SupportedModels.MoveNet,
+          {
+            modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+            enableSmoothing: true
+          }
+        );
+        els.cameraBtn.disabled = false;
+        setStatus("模型已加载。点击开启摄像头开始实时识别。");
+      } catch (error) {
+        console.error(error);
+        setStatus("模型加载失败：请确认网络可访问 CDN / TFHub。");
+      }
+    }
+
+    function sizeCanvasToStage() {
+      const rect = els.overlay.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      els.overlay.width = Math.max(1, Math.floor(rect.width * ratio));
+      els.overlay.height = Math.max(1, Math.floor(rect.height * ratio));
+    }
+
+    function drawPose(pose, sourceWidth, sourceHeight, mirrored = false) {
+      sizeCanvasToStage();
+      const ctx = els.overlay.getContext("2d");
+      const cw = els.overlay.width;
+      const ch = els.overlay.height;
+      ctx.clearRect(0, 0, cw, ch);
+
+      if (!pose || !pose.keypoints) {
+        updateStats([], 0);
+        return;
+      }
+
+      const points = new Map();
+      let visible = 0;
+      let maxScore = 0;
+      const scale = Math.min(cw / sourceWidth, ch / sourceHeight);
+      const offsetX = (cw - sourceWidth * scale) / 2;
+      const offsetY = (ch - sourceHeight * scale) / 2;
+      for (const kp of pose.keypoints) {
+        const score = kp.score || 0;
+        maxScore = Math.max(maxScore, score);
+        const sourceX = mirrored ? sourceWidth - kp.x : kp.x;
+        const x = offsetX + sourceX * scale;
+        const y = offsetY + kp.y * scale;
+        points.set(kp.name, { ...kp, x, y, score });
+        if (score >= threshold()) visible += 1;
+      }
+
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "#67d5ff";
+      ctx.lineCap = "round";
+      for (const [a, b] of EDGES) {
+        const p1 = points.get(a);
+        const p2 = points.get(b);
+        if (!p1 || !p2 || p1.score < threshold() || p2.score < threshold()) continue;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+
+      for (const name of KEYPOINT_NAMES) {
+        const p = points.get(name);
+        if (!p || p.score < threshold()) continue;
+        ctx.beginPath();
+        ctx.fillStyle = "#b7ff3c";
+        ctx.strokeStyle = "#101511";
+        ctx.lineWidth = 3;
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      updateStats(pose.keypoints, maxScore, visible);
+    }
+
+    function updateStats(keypoints, maxScore, visibleOverride) {
+      const visible = visibleOverride ?? keypoints.filter(kp => (kp.score || 0) >= threshold()).length;
+      els.visibleCount.textContent = `${visible} / 17`;
+      els.maxScore.textContent = maxScore.toFixed(2);
+    }
+
+    async function detectFrame() {
+      if (!running) return;
+      if (els.video.readyState >= 2) {
+        const poses = await detector.estimatePoses(els.video, { flipHorizontal: false });
+        const now = performance.now();
+        const fps = 1000 / Math.max(1, now - lastTime);
+        lastTime = now;
+        els.fps.textContent = fps.toFixed(1);
+        drawPose(poses[0], els.video.videoWidth, els.video.videoHeight, true);
+      }
+      requestAnimationFrame(detectFrame);
+    }
+
+    async function startCamera() {
+      if (!detector) return;
+      stopCamera();
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 960 }, height: { ideal: 540 } },
+          audio: false
+        });
+        els.video.srcObject = stream;
+        await els.video.play();
+        els.video.style.display = "block";
+        els.empty.style.display = "none";
+        els.stopBtn.disabled = false;
+        running = true;
+        lastTime = performance.now();
+        setStatus("摄像头运行中。绿色点为关节点，蓝线为骨架。");
+        detectFrame();
+      } catch (error) {
+        console.error(error);
+        setStatus("摄像头无法打开。请确认浏览器权限，或换一个可用摄像头。");
+      }
+    }
+
+    function stopCamera() {
+      running = false;
+      if (stream) {
+        for (const track of stream.getTracks()) track.stop();
+        stream = null;
+      }
+      els.video.pause();
+      els.video.srcObject = null;
+      els.video.style.display = "none";
+      els.stopBtn.disabled = true;
+      els.fps.textContent = "0";
+    }
+
+    els.cameraBtn.addEventListener("click", startCamera);
+    els.stopBtn.addEventListener("click", stopCamera);
+    els.threshold.addEventListener("input", () => {
+      els.thresholdText.textContent = Number(els.threshold.value).toFixed(2);
+    });
+    window.addEventListener("resize", () => {
+      sizeCanvasToStage();
+    });
+
+    init();
+  </script>
+</body>
+</html>

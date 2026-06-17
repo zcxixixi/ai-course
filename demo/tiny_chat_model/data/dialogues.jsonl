@@ -1,0 +1,40 @@
+{"text":"你好","intent":"greet"}
+{"text":"你好呀","intent":"greet"}
+{"text":"hello","intent":"greet"}
+{"text":"嗨","intent":"greet"}
+{"text":"早上好","intent":"greet"}
+{"text":"你是谁","intent":"identity"}
+{"text":"介绍一下你自己","intent":"identity"}
+{"text":"你能做什么","intent":"identity"}
+{"text":"你是什么模型","intent":"identity"}
+{"text":"帮我解释 NLP","intent":"nlp"}
+{"text":"什么是自然语言处理","intent":"nlp"}
+{"text":"NLP 是什么","intent":"nlp"}
+{"text":"自然语言处理有什么用","intent":"nlp"}
+{"text":"帮我解释 CV","intent":"cv"}
+{"text":"什么是计算机视觉","intent":"cv"}
+{"text":"CV 是什么","intent":"cv"}
+{"text":"计算机视觉有什么用","intent":"cv"}
+{"text":"什么是 Transformer","intent":"transformer"}
+{"text":"解释一下 Transformer","intent":"transformer"}
+{"text":"Transformer 为什么重要","intent":"transformer"}
+{"text":"attention 是什么","intent":"attention"}
+{"text":"注意力机制是什么","intent":"attention"}
+{"text":"self attention 怎么理解","intent":"attention"}
+{"text":"什么是 diffusion","intent":"diffusion"}
+{"text":"扩散模型是什么","intent":"diffusion"}
+{"text":"文生图怎么做","intent":"diffusion"}
+{"text":"视频生成是什么","intent":"video"}
+{"text":"视频模型和生图有什么区别","intent":"video"}
+{"text":"什么是 world model","intent":"world_model"}
+{"text":"世界模型是什么","intent":"world_model"}
+{"text":"world model 有什么用","intent":"world_model"}
+{"text":"给我一个学习建议","intent":"study"}
+{"text":"怎么学人工智能","intent":"study"}
+{"text":"怎么讲这节课","intent":"study"}
+{"text":"谢谢","intent":"thanks"}
+{"text":"感谢","intent":"thanks"}
+{"text":"太好了","intent":"thanks"}
+{"text":"再见","intent":"bye"}
+{"text":"拜拜","intent":"bye"}
+{"text":"退出","intent":"bye"}

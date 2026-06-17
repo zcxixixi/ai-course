@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NLP 与 CV 现代核心要点</title>
+  <style>
+    :root {
+      --paper: #f4f1e8;
+      --ink: #111820;
+      --muted: #5b625f;
+      --line: #242b31;
+      --soft-line: rgba(17, 24, 32, .18);
+      --teal: #0b7f7b;
+      --blue: #215a93;
+      --red: #c84630;
+      --gold: #c8891f;
+      --green: #4d7b55;
+      --white: #fffdf7;
+      --shadow: 0 18px 45px rgba(16, 24, 32, .12);
+      --radius: 8px;
+      --space: clamp(18px, 2.2vw, 32px);
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--paper);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Noto Serif SC", "Songti SC", "SimSun", serif;
+      background:
+        linear-gradient(90deg, rgba(17,24,32,.045) 1px, transparent 1px) 0 0 / 44px 44px,
+        linear-gradient(rgba(17,24,32,.035) 1px, transparent 1px) 0 0 / 44px 44px,
+        var(--paper);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .42;
+      mix-blend-mode: multiply;
+      background-image:
+        radial-gradient(circle at 10% 20%, rgba(17,24,32,.07), transparent 1px),
+        radial-gradient(circle at 78% 34%, rgba(17,24,32,.06), transparent 1px);
+      background-size: 9px 9px, 13px 13px;
+      z-index: 10;
+    }
+
+    a { color: inherit; }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 22px 18px;
+      border-right: 2px solid var(--line);
+      background: rgba(244, 241, 232, .88);
+      backdrop-filter: blur(10px);
+      overflow: auto;
+    }
+
+    .brand {
+      border: 2px solid var(--line);
+      background: var(--white);
+      padding: 14px;
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .brand small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: .04em;
+      margin-bottom: 8px;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.14;
+      font-weight: 900;
+    }
+
+    .toc {
+      display: grid;
+      gap: 7px;
+      margin: 22px 0;
+    }
+
+    .toc a,
+    .download {
+      text-decoration: none;
+      border: 1.5px solid var(--line);
+      background: rgba(255,253,247,.72);
+      padding: 9px 10px;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.2;
+      transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+    }
+
+    .toc a:hover,
+    .toc a:focus,
+    .download:hover,
+    .download:focus {
+      outline: none;
+      background: var(--white);
+      transform: translate(-2px, -2px);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+
+    .download {
+      display: block;
+      text-align: center;
+      color: var(--white);
+      background: var(--ink);
+      margin-top: 12px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.65;
+      border-top: 1px solid var(--soft-line);
+      padding-top: 14px;
+    }
+
+    main {
+      min-width: 0;
+    }
+
+    section {
+      min-height: 100vh;
+      padding: clamp(34px, 5vw, 72px);
+      border-bottom: 2px solid var(--line);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(340px, .92fr);
+      gap: clamp(26px, 5vw, 70px);
+      align-items: center;
+      min-height: 94vh;
+    }
+
+    .kicker {
+      display: inline-block;
+      font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+      font-weight: 900;
+      font-size: 12px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      border: 2px solid var(--line);
+      background: var(--gold);
+      padding: 7px 10px;
+      margin-bottom: 18px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: clamp(44px, 7vw, 102px);
+      line-height: .96;
+      max-width: 10ch;
+    }
+
+    h2 {
+      font-size: clamp(34px, 5vw, 70px);
+      line-height: 1;
+      max-width: 11ch;
+    }
+
+    h3 {
+      font-size: 20px;
+      line-height: 1.16;
+    }
+
+    .lead {
+      max-width: 760px;
+      margin: 28px 0 0;
+      font-size: clamp(18px, 2vw, 28px);
+      line-height: 1.42;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 32px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      border: 2px solid var(--line);
+      background: var(--white);
+      padding: 6px 10px;
+      font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .tag.teal { background: #dcefed; }
+    .tag.blue { background: #dfeaf4; }
+    .tag.red { background: #f2ddd8; }
+
+    .map {
+      border: 2px solid var(--line);
+      background: var(--white);
+      padding: 18px;
+      min-height: 430px;
+      box-shadow: 10px 10px 0 var(--ink);
+      position: relative;
+    }
+
+    .map svg {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .map-caption {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 16px;
+      border-top: 2px solid var(--line);
+      padding-top: 12px;
+      font-weight: 900;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 14px;
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, .72fr) minmax(280px, .28fr);
+      gap: var(--space);
+      align-items: end;
+      margin-bottom: 32px;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.55;
+      font-weight: 700;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 16px;
+    }
+
+    .panel {
+      border: 2px solid var(--line);
+      background: var(--white);
+      padding: 18px;
+      box-shadow: 6px 6px 0 rgba(17, 24, 32, .92);
+    }
+
+    .panel p,
+    .panel li {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.54;
+      font-weight: 650;
+    }
+
+    .panel p { margin: 10px 0 0; }
+
+    .panel ul {
+      margin: 14px 0 0;
+      padding-left: 18px;
+    }
+
+    .span-3 { grid-column: span 3; }
+    .span-4 { grid-column: span 4; }
+    .span-5 { grid-column: span 5; }
+    .span-6 { grid-column: span 6; }
+    .span-7 { grid-column: span 7; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    .accent-teal { border-top: 9px solid var(--teal); }
+    .accent-blue { border-top: 9px solid var(--blue); }
+    .accent-red { border-top: 9px solid var(--red); }
+    .accent-gold { border-top: 9px solid var(--gold); }
+    .accent-green { border-top: 9px solid var(--green); }
+
+    .compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .compare .panel:first-child {
+      transform: translateY(18px);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(110px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+      margin-top: 20px;
+    }
+
+    .step {
+      min-height: 92px;
+      border: 2px solid var(--line);
+      background: var(--white);
+      padding: 12px;
+      font-weight: 900;
+      display: grid;
+      align-items: center;
+      text-align: center;
+      position: relative;
+    }
+
+    .step:nth-child(2n) { background: #e4eee8; }
+    .step:nth-child(3n) { background: #e2ebf3; }
+
+    .step:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -11px;
+      width: 18px;
+      height: 18px;
+      border-top: 2px solid var(--line);
+      border-right: 2px solid var(--line);
+      background: inherit;
+      transform: translateY(-50%) rotate(45deg);
+      z-index: 2;
+    }
+
+    .timeline {
+      display: grid;
+      gap: 12px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 92px minmax(120px, 210px) 1fr;
+      gap: 12px;
+      align-items: stretch;
+      border: 2px solid var(--line);
+      background: var(--white);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .row time,
+    .row strong,
+    .row span {
+      padding: 13px 14px;
+      display: flex;
+      align-items: center;
+    }
+
+    .row time {
+      background: var(--ink);
+      color: var(--white);
+      font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .row strong {
+      border-right: 2px solid var(--line);
+      font-size: 16px;
+    }
+
+    .row span {
+      color: var(--muted);
+      line-height: 1.45;
+      font-weight: 700;
+    }
+
+    .task-board {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 9px;
+      margin-top: 18px;
+    }
+
+    .task {
+      border: 2px solid var(--line);
+      background: var(--white);
+      padding: 12px 10px;
+      min-height: 90px;
+    }
+
+    .task b {
+      display: block;
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    .task span {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+      font-weight: 700;
+    }
+
+    .takeaways {
+      counter-reset: point;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .takeaways li {
+      counter-increment: point;
+      border: 2px solid var(--line);
+      background: var(--white);
+      padding: 16px 16px 16px 66px;
+      min-height: 86px;
+      position: relative;
+      font-size: 18px;
+      line-height: 1.35;
+      font-weight: 900;
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+
+    .takeaways li::before {
+      content: counter(point);
+      position: absolute;
+      left: 15px;
+      top: 14px;
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      color: var(--white);
+      background: var(--teal);
+      font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+      font-weight: 900;
+    }
+
+    .refs {
+      columns: 2;
+      column-gap: 38px;
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+      font-weight: 700;
+    }
+
+    .refs a {
+      text-decoration-thickness: 1.5px;
+      text-underline-offset: 3px;
+    }
+
+    .toolbar {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      display: flex;
+      gap: 8px;
+      z-index: 20;
+    }
+
+    .toolbar button {
+      width: 42px;
+      height: 42px;
+      border: 2px solid var(--line);
+      background: var(--white);
+      cursor: pointer;
+      box-shadow: 4px 4px 0 var(--ink);
+      font-family: "Avenir Next", "Trebuchet MS", sans-serif;
+      font-weight: 900;
+    }
+
+    .toolbar button:focus {
+      outline: 3px solid var(--gold);
+      outline-offset: 2px;
+    }
+
+    body.focus-mode aside,
+    body.focus-mode .meta,
+    body.focus-mode .download {
+      display: none;
+    }
+
+    body.focus-mode .shell {
+      grid-template-columns: 1fr;
+    }
+
+    body.focus-mode section {
+      padding-left: clamp(42px, 8vw, 116px);
+      padding-right: clamp(42px, 8vw, 116px);
+    }
+
+    @media (max-width: 1040px) {
+      .shell { grid-template-columns: 1fr; }
+      aside {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 2px solid var(--line);
+      }
+      .toc {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .hero,
+      .section-head,
+      .compare {
+        grid-template-columns: 1fr;
+      }
+      .map { min-height: 360px; }
+      .span-3,
+      .span-4,
+      .span-5,
+      .span-6,
+      .span-7,
+      .span-8 { grid-column: span 12; }
+      .flow,
+      .task-board {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 680px) {
+      .shell {
+        display: flex;
+        flex-direction: column;
+      }
+      main { order: 1; }
+      aside { order: 2; }
+      section { padding: 30px 18px; }
+      .toc,
+      .flow,
+      .task-board,
+      .takeaways {
+        grid-template-columns: 1fr;
+      }
+      .row {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+      .row strong {
+        border-right: 0;
+        border-bottom: 2px solid var(--line);
+      }
+      .refs {
+        columns: 1;
+      }
+      .map-caption {
+        position: static;
+        margin-top: 14px;
+      }
+      h1 {
+        max-width: 8ch;
+        font-size: clamp(42px, 17vw, 68px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside aria-label="页面目录">
+      <div class="brand">
+        <small>CORE LECTURE</small>
+        <strong>NLP 与 CV<br>现代核心要点</strong>
+      </div>
+      <nav class="toc">
+        <a href="#why">减法</a>
+        <a href="#shared">共同底层</a>
+        <a href="#nlp">NLP 核心</a>
+        <a href="#cv">CV 核心</a>
+        <a href="#multimodal">多模态</a>
+        <a href="#evaluation">评估</a>
+        <a href="#plan">讲课路径</a>
+        <a href="#takeaways">8 句话</a>
+      </nav>
+      <a class="download" href="./NLP与CV现代核心要点-精简版.pptx">打开 PPT 版</a>
+      <p class="meta">设计方向：课堂黑板报 + 工程架构图。适合投屏、滚动讲解、课后复习。</p>
+    </aside>
+
+    <main>
+      <section class="hero" id="top">
+        <div>
+          <span class="kicker">2026 / Modern AI</span>
+          <h1>NLP 与 CV 现代核心要点</h1>
+          <p class="lead">删掉历史堆叠和旧方法铺陈，抓住现在最主流的技术主线：表示、基础模型、多模态、工具、评估。</p>
+          <div class="strip" aria-label="课程标签">
+            <span class="tag teal">Token / Patch</span>
+            <span class="tag blue">Transformer</span>
+            <span class="tag red">RAG / VLM / SAM</span>
+          </div>
+        </div>
+
+        <figure class="map" aria-label="NLP 与 CV 共同结构图">
+          <svg viewBox="0 0 560 420" role="img">
+            <title>NLP 与 CV 共同结构</title>
+            <rect x="18" y="22" width="210" height="96" fill="#dcefed" stroke="#111820" stroke-width="3"/>
+            <text x="44" y="65" font-size="30" font-weight="900" fill="#0b7f7b">NLP</text>
+            <text x="44" y="94" font-size="16" fill="#334">文本 → token</text>
+            <rect x="332" y="22" width="210" height="96" fill="#dfeaf4" stroke="#111820" stroke-width="3"/>
+            <text x="358" y="65" font-size="30" font-weight="900" fill="#215a93">CV</text>
+            <text x="358" y="94" font-size="16" fill="#334">图像 → patch</text>
+            <line x1="120" y1="120" x2="250" y2="190" stroke="#111820" stroke-width="3"/>
+            <line x1="438" y1="120" x2="310" y2="190" stroke="#111820" stroke-width="3"/>
+            <rect x="202" y="184" width="158" height="76" fill="#111820" stroke="#111820" stroke-width="3"/>
+            <text x="230" y="230" font-size="20" font-weight="900" fill="#fffdf7">Embedding</text>
+            <line x1="281" y1="260" x2="281" y2="316" stroke="#111820" stroke-width="3"/>
+            <rect x="168" y="316" width="226" height="62" fill="#c8891f" stroke="#111820" stroke-width="3"/>
+            <text x="207" y="355" font-size="22" font-weight="900" fill="#111820">Transformer</text>
+          </svg>
+          <figcaption class="map-caption"><span>输入 → 表示 → 模型 → 输出 → 验证</span><span>同一套思想，不同模态</span></figcaption>
+        </figure>
+      </section>
+
+      <section id="why">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Cut</span>
+            <h2>先做减法</h2>
+          </div>
+          <p>旧内容不是全错，而是不该占据主线。课堂目标从“面面俱到”改成“讲清现代系统怎么工作”。</p>
+        </div>
+        <div class="compare">
+          <article class="panel accent-red">
+            <h3>压缩到背景</h3>
+            <ul>
+              <li>语言类型学、ELIZA 等历史叙述</li>
+              <li>One-hot、BoW、TF-IDF 的长篇推导</li>
+              <li>图像滤波、边缘、形态学清单</li>
+              <li>HOG、SIFT 等手工特征展开</li>
+              <li>重复的定义、分类、意义页面</li>
+            </ul>
+          </article>
+          <article class="panel accent-teal">
+            <h3>集中讲清</h3>
+            <ul>
+              <li>Token、Embedding、Attention、Transformer</li>
+              <li>预训练、指令对齐、RAG、工具调用</li>
+              <li>Patch、ViT、CLIP、SAM、VLM</li>
+              <li>检测、分割、跟踪、视觉问答的边界</li>
+              <li>评估、幻觉、鲁棒性、成本、安全</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="shared">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Shared Core</span>
+            <h2>共同底层</h2>
+          </div>
+          <p>NLP 和 CV 的现代范式越来越像：把复杂输入切成模型可处理的单元，再学习上下文表示。</p>
+        </div>
+        <div class="flow">
+          <div class="step">原始数据</div>
+          <div class="step">Token / Patch</div>
+          <div class="step">Embedding</div>
+          <div class="step">Transformer</div>
+          <div class="step">预训练</div>
+          <div class="step">对齐与部署</div>
+        </div>
+        <div class="grid" style="margin-top:24px">
+          <article class="panel accent-gold span-4">
+            <h3>表示学习</h3>
+            <p>文本变 token，图像/视频变 patch。模型在向量空间里学习相似性、结构和上下文。</p>
+          </article>
+          <article class="panel accent-blue span-4">
+            <h3>基础模型</h3>
+            <p>先学通用能力，再用提示、检索、微调或工具适配具体任务。</p>
+          </article>
+          <article class="panel accent-green span-4">
+            <h3>系统工程</h3>
+            <p>真实可用依赖数据、评估、反馈、延迟、成本、安全和人机协作。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="nlp">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Part 1</span>
+            <h2>NLP 核心</h2>
+          </div>
+          <p>语言模型不是聊天框。核心是 token、语义向量、注意力、对齐、外部知识与行动能力。</p>
+        </div>
+        <div class="grid">
+          <article class="panel accent-gold span-4">
+            <h3>Token</h3>
+            <p>文本被切成模型可处理的片段，不等同于自然语言里的“词”。上下文窗口限制的是 token 数。</p>
+          </article>
+          <article class="panel accent-teal span-4">
+            <h3>Embedding</h3>
+            <p>把文本映射到向量空间，用距离表达语义相关性。搜索、推荐、聚类、分类都依赖它。</p>
+          </article>
+          <article class="panel accent-blue span-4">
+            <h3>Transformer</h3>
+            <p>注意力机制让模型在上下文中动态选择重要信息，而不是只看固定窗口。</p>
+          </article>
+          <article class="panel accent-green span-6">
+            <h3>从续写到助手</h3>
+            <p>预训练让模型会预测下一个 token；指令微调和偏好对齐让模型更愿意按人类目标工作。</p>
+          </article>
+          <article class="panel accent-red span-6">
+            <h3>RAG 与工具</h3>
+            <p>主流 NLP 产品不是裸模型，而是模型 + 知识库 + 搜索 + 工具 + 权限 + 评估。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="cv">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Part 2</span>
+            <h2>CV 核心</h2>
+          </div>
+          <p>计算机视觉不只是分类图片，也不是 OpenCV 预处理清单。核心是视觉表示、定位分割、图文对齐和动态世界。</p>
+        </div>
+        <div class="grid">
+          <article class="panel accent-gold span-4">
+            <h3>Patch</h3>
+            <p>图像被切成 patch，形成类似 token 的序列，再进入 Transformer 或混合视觉骨干。</p>
+          </article>
+          <article class="panel accent-blue span-4">
+            <h3>ViT / Backbone</h3>
+            <p>CNN、ViT、混合架构负责提取视觉特征。高层特征从纹理走向对象和关系。</p>
+          </article>
+          <article class="panel accent-teal span-4">
+            <h3>CLIP / VLM</h3>
+            <p>图像和文本共享语义空间后，可以用自然语言检索、分类、问答和推理。</p>
+          </article>
+        </div>
+        <div class="task-board" aria-label="视觉任务边界">
+          <div class="task"><b>分类</b><span>整张图是什么？输出类别标签。</span></div>
+          <div class="task"><b>检测</b><span>目标在哪里？输出类别和边界框。</span></div>
+          <div class="task"><b>语义分割</b><span>每个像素属于哪类？输出类别掩膜。</span></div>
+          <div class="task"><b>实例分割</b><span>每个独立对象是谁？输出实例掩膜。</span></div>
+          <div class="task"><b>跟踪/动作</b><span>时间上发生了什么？输出轨迹和动作片段。</span></div>
+        </div>
+      </section>
+
+      <section id="multimodal">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Part 3</span>
+            <h2>多模态合流</h2>
+          </div>
+          <p>文本负责表达意图，视觉负责提供证据，模型负责对齐与推理，工具负责行动。</p>
+        </div>
+        <div class="grid">
+          <article class="panel accent-blue span-4">
+            <h3>视觉问答</h3>
+            <p>看图、读题、定位证据、生成回答。难点是不能靠数据偏差猜答案。</p>
+          </article>
+          <article class="panel accent-teal span-4">
+            <h3>文档理解</h3>
+            <p>版面、表格、图像和文字一起解析。典型场景是合同、票据、报告、课件。</p>
+          </article>
+          <article class="panel accent-green span-4">
+            <h3>视觉 Agent</h3>
+            <p>观察屏幕或环境，再调用工具完成任务。重点是权限、验证和失败兜底。</p>
+          </article>
+          <article class="panel accent-red span-12">
+            <h3>现代 AI 产品架构</h3>
+            <div class="flow">
+              <div class="step">用户输入</div>
+              <div class="step">模态识别</div>
+              <div class="step">检索与记忆</div>
+              <div class="step">模型推理</div>
+              <div class="step">工具执行</div>
+              <div class="step">验证反馈</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="evaluation">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Verify</span>
+            <h2>必须讲评估</h2>
+          </div>
+          <p>没有评估闭环，模型能力越强，误用风险越大。</p>
+        </div>
+        <div class="grid">
+          <article class="panel accent-teal span-4">
+            <h3>NLP 评估</h3>
+            <ul>
+              <li>事实正确性</li>
+              <li>证据忠实度</li>
+              <li>拒答与不确定性</li>
+              <li>偏见、安全、隐私</li>
+            </ul>
+          </article>
+          <article class="panel accent-blue span-4">
+            <h3>CV 评估</h3>
+            <ul>
+              <li>准确率、mAP、IoU</li>
+              <li>召回率与误报率</li>
+              <li>鲁棒性与域迁移</li>
+              <li>FPS、内存、端侧功耗</li>
+            </ul>
+          </article>
+          <article class="panel accent-red span-4">
+            <h3>系统评估</h3>
+            <ul>
+              <li>端到端成功率</li>
+              <li>人工介入率</li>
+              <li>成本与延迟</li>
+              <li>漂移监控与失败回放</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="plan">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Lecture Path</span>
+            <h2>一节课讲法</h2>
+          </div>
+          <p>把知识点变成一条可记住的路径，而不是模型名列表。</p>
+        </div>
+        <div class="timeline">
+          <div class="row"><time>10 min</time><strong>为什么做减法</strong><span>旧式知识点只做参照，目标是理解现代系统。</span></div>
+          <div class="row"><time>25 min</time><strong>NLP 核心</strong><span>Token、Embedding、Transformer、LLM、RAG、工具。</span></div>
+          <div class="row"><time>25 min</time><strong>CV 核心</strong><span>Patch、ViT、检测/分割、CLIP、SAM、视频生成。</span></div>
+          <div class="row"><time>15 min</time><strong>融合与架构</strong><span>多模态系统如何把文本、视觉和工具串起来。</span></div>
+          <div class="row"><time>15 min</time><strong>评估与讨论</strong><span>幻觉、鲁棒性、成本、风险、课堂案例。</span></div>
+        </div>
+      </section>
+
+      <section id="takeaways">
+        <div class="section-head">
+          <div>
+            <span class="kicker">Memory</span>
+            <h2>带走 8 句话</h2>
+          </div>
+          <p>比记住一堆模型名更重要。</p>
+        </div>
+        <ol class="takeaways">
+          <li>NLP 的入口是 token，CV 的入口是 patch。</li>
+          <li>Embedding 是语义空间，不是关键词匹配。</li>
+          <li>Transformer 的核心是上下文注意力。</li>
+          <li>LLM 不是知识库，RAG 和工具让它接近真实业务。</li>
+          <li>CV 不只是分类，还包括定位、分割、跟踪和生成。</li>
+          <li>CLIP / VLM 让图像能被自然语言查询和推理。</li>
+          <li>SAM 类模型代表可提示、可交互的视觉分割。</li>
+          <li>上线看评估闭环，不看 demo 演示效果。</li>
+        </ol>
+      </section>
+
+      <section id="refs">
+        <div class="section-head">
+          <div>
+            <span class="kicker">References</span>
+            <h2>参考依据</h2>
+          </div>
+          <p>用于校准“当前主流”的表述。课堂讲解不必逐条展开。</p>
+        </div>
+        <div class="panel accent-gold">
+          <div class="refs">
+            <p><a href="https://developers.openai.com/api/docs/guides/embeddings">OpenAI Embeddings</a></p>
+            <p><a href="https://developers.openai.com/api/docs/guides/function-calling">OpenAI Function Calling</a></p>
+            <p><a href="https://developers.openai.com/api/docs/guides/agents">OpenAI Agents SDK</a></p>
+            <p><a href="https://openai.com/index/clip/">OpenAI CLIP</a></p>
+            <p><a href="https://research.google/blog/transformers-for-image-recognition-at-scale/">Google Research ViT</a></p>
+            <p><a href="https://ai.meta.com/research/sam2/">Meta AI SAM 2</a></p>
+            <p><a href="https://openai.com/index/video-generation-models-as-world-simulators/">OpenAI Sora 技术报告</a></p>
+            <p>原始课件：自然语言处理-讲解备注.pptx；计算机视觉0406-讲解备注.pptx</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toolbar" aria-label="页面工具">
+    <button type="button" id="focusBtn" title="切换专注模式" aria-label="切换专注模式">F</button>
+    <button type="button" id="topBtn" title="回到顶部" aria-label="回到顶部">↑</button>
+  </div>
+
+  <script>
+    const focusBtn = document.querySelector("#focusBtn");
+    const topBtn = document.querySelector("#topBtn");
+
+    focusBtn.addEventListener("click", () => {
+      document.body.classList.toggle("focus-mode");
+    });
+
+    topBtn.addEventListener("click", () => {
+      document.querySelector("#top").scrollIntoView({ behavior: "smooth" });
+    });
+  </script>
+</body>
+</html>
