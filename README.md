@@ -9,6 +9,12 @@
 - Demo 05：神经网络互动入门  
   路径：`我自己学习资料/demos/05-neural-network-playground/index.html`  
   内容：MLP 手写数字识别 + 轻量版 MobileNet CNN 图像分类。
+- Demo 06：人体关节点识别  
+  路径：`demo/movenet_pose_demo/index.html`  
+  内容：MoveNet Lightning 实时摄像头人体 17 个关节点识别。
+- Demo 07：本地小模型智能问答  
+  路径：`demo/qwen_local_chat/README.md`  
+  内容：Qwen2.5-0.5B-Instruct + llama.cpp，本机端侧聊天推理。
 
 ## 课程录屏
 
@@ -24,6 +30,7 @@
 - `我自己学习资料/demos/`：课堂 demo，包含网页演示和 Python 实验任务。
 - `我自己学习资料/references/`：外部课程、书籍、示例仓库等参考资料。
 - `我自己学习资料/src/`：可复用 Python 代码。
+- `demo/`：独立课堂演示项目，包含关节点识别和本地小模型问答。
 
 ## 课程安排
 
@@ -41,6 +48,8 @@
 - 第二节课：运行 demo，理解大模型和 Agent 区别，提交到 GitHub Issues。
 - 第三节课：参与 GitHub Discussion 讨论，运行阅读理解 demo，并提交答案和证据。
 - 第四节课：阅读 `courses/nn-zero-to-hero` 的神经网络内容，发到 Discussion，并跑通 Demo 05。
+- 第六节课：跑通 Demo 06，理解计算机视觉中的人体姿态估计。
+- 第七节课：跑通 Demo 07，理解本地小模型推理和云端 API 的区别。
 
 ## 成绩与编号
 
@@ -345,6 +354,118 @@ http://localhost:8000/05-neural-network-playground/
 ```
 
 提交时补充 demo 截图或运行结果。
+
+## 第六节课任务
+
+本节课目标：跑通人体关节点识别 demo，理解计算机视觉中的姿态估计任务。
+
+### 1. 运行 Demo 06
+
+进入 demo 目录：
+
+```bash
+cd demo/movenet_pose_demo
+python3 -m http.server 8765
+```
+
+浏览器打开：
+
+```text
+http://localhost:8765
+```
+
+点击“开启摄像头”，允许浏览器摄像头权限。
+
+说明：
+
+- 首次运行需要联网加载 TensorFlow.js 和 MoveNet 模型。
+- 推理在本机浏览器中运行。
+- 如果摄像头打不开，检查浏览器权限，或换 Chrome 浏览器。
+
+### 2. 观察结果
+
+请观察页面中的：
+
+- 绿色点：人体关键点
+- 蓝色线：骨架连接
+- FPS：实时推理速度
+- 可见关节点数量：当前检测到多少个关键点
+
+### 3. 提交要求
+
+在 GitHub Discussion 或 Issues 中提交：
+
+- Demo 06 的运行截图
+- 你的电脑系统：Mac 或 Windows
+- 摄像头是否正常打开
+- 你观察到的 3 个现象
+- 回答：姿态估计和图像分类有什么不同？
+- 回答：这种技术可以用在哪些场景？
+
+隐私提醒：截图时注意不要暴露个人隐私、房间环境、证件、聊天窗口等敏感信息。
+
+## 第七节课任务
+
+本节课目标：跑通本地小模型智能问答 demo，理解端侧推理、本地模型、量化模型和云端 API 的区别。
+
+### 1. 运行 Demo 07
+
+Demo 07 不提交模型权重文件。首次部署会自动下载约 469MB 的 GGUF 模型。
+
+Mac：
+
+```bash
+cd demo/qwen_local_chat
+chmod +x setup_mac.sh download_model.sh run_server.sh
+./setup_mac.sh
+./run_server.sh
+```
+
+Windows PowerShell：
+
+```powershell
+cd demo\qwen_local_chat
+powershell -ExecutionPolicy Bypass -File .\setup_windows.ps1
+powershell -ExecutionPolicy Bypass -File .\run_server.ps1
+```
+
+浏览器打开：
+
+```text
+http://127.0.0.1:8767
+```
+
+### 2. 尝试提问
+
+可以输入：
+
+```text
+你好
+你是谁
+讲个笑话
+帮我解释一下 Transformer
+```
+
+说明：
+
+- 使用模型：Qwen2.5-0.5B-Instruct-GGUF
+- 推理框架：llama.cpp
+- 模型文件会下载到 `demo/qwen_local_chat/models/`
+- 模型权重不会提交到 GitHub
+
+### 3. 提交要求
+
+在 GitHub Discussion 或 Issues 中提交：
+
+- Demo 07 的运行截图
+- 你的电脑系统：Mac 或 Windows
+- 你问了哪 3 个问题
+- 模型分别怎么回答
+- 回答：本地模型推理和调用云端 API 有什么区别？
+- 回答：为什么要使用量化模型？
+- 遇到的问题，以及你是怎么解决的
+
+隐私提醒：不要把 API Key、个人文件路径、账号信息、聊天隐私截图提交到公开仓库。
 
 ## 维护方式
 
